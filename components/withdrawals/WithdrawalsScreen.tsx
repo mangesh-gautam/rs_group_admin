@@ -6,14 +6,18 @@ import { Alert, Spinner } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
 import { ApiError, errorMessage } from "@/lib/auth/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { formatDate } from "@/lib/accounts/types";
 import { formatDateTime } from "@/lib/auth/types";
 import { DEPOSIT_MODES as PAYMENT_MODES, modeLabel, money } from "@/lib/deposits/types";
 import type {
   PaymentMode,
+  PenaltyReceipt,
   WithdrawalAccount,
   WithdrawalPage,
+  WithdrawalQuote,
   WithdrawalReceipt,
 } from "@/lib/withdrawals/types";
+import { WithdrawalConfirmDialog } from "./WithdrawalConfirmDialog";
 
 /** "rs 110033 000001" / "110033000001" → "RS110033000001" */
 const normaliseAccountNo = (v: string) => {
@@ -21,9 +25,15 @@ const normaliseAccountNo = (v: string) => {
   return /^\d{12}$/.test(s) ? `RS${s}` : s;
 };
 
+/** Display only — the server computes the real deduction: round(amount × rate / 100, 2). */
+const deduction = (amount: number, rate: string) => Math.round(Math.round(amount * 100) * Number(rate) / 100) / 100;
+
 /**
- * Withdrawals screen: the withdrawal desk (find account → amount ≤ available
- * balance → receipt) and the withdrawal history. Paying out refreshes the history.
+ * Withdrawals screen: the withdrawal desk (find account → deposit-cycle status
+ * → collect any outstanding missed-month penalty → amount ≤ available
+ * balance (principal + interest) → NORMAL or EARLY (20 % deducted while the
+ * cycle isn't complete) → receipt) and the withdrawal history.
+ * Paying out refreshes the history. The backend decides all of it.
  */
 export function WithdrawalsScreen({ initialAccountNo }: { initialAccountNo: string }) {
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -65,6 +75,8 @@ function WithdrawalDesk({
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [receipt, setReceipt] = useState<WithdrawalReceipt | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [quote, setQuote] = useState<WithdrawalQuote | null>(null); // open confirmation popup
   const amountRef = useRef<HTMLInputElement>(null);
 
   const find = useCallback(
@@ -122,6 +134,10 @@ function WithdrawalDesk({
   const available = account ? Number(account.balance) : 0;
   const amountNum = Number(values.amount);
   const remaining = values.amount && amountNum > 0 ? (available - amountNum).toFixed(2) : null;
+  const terms = account?.withdrawalToday;
+  const early = terms?.type === "EARLY";
+  const penalty = early && amountNum > 0 ? deduction(amountNum, terms.penaltyRate) : 0;
+  const payout = amountNum > 0 ? (amountNum - penalty).toFixed(2) : null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -136,47 +152,66 @@ function WithdrawalDesk({
     setErrors(found);
     if (Object.keys(found).length) return;
 
-    if (
-      !window.confirm(
-        `Withdraw ${money(values.amount)} (${modeLabel(values.mode)}) from ${account.accountNo} — ${account.name}?\n\nBalance after: ${money(remaining ?? "0")}`,
-      )
-    ) {
-      return;
-    }
-
-    setSaving(true);
+    // Ask the server what this withdrawal would do, then confirm it in the popup.
+    setQuoting(true);
     setFormError(null);
+    try {
+      const params = new URLSearchParams({ amount: values.amount });
+      setQuote(await authFetch<WithdrawalQuote>(`/api/withdrawals/accounts/${account.accountNo}/quote?${params}`));
+    } catch (err) {
+      failed(err);
+    } finally {
+      setQuoting(false);
+    }
+  };
+
+  /** Popup confirmed → record the withdrawal (the backend re-checks it against the quote). */
+  const pay = async () => {
+    if (!account || !quote) return;
+    setSaving(true);
     try {
       const result = await authFetch<WithdrawalReceipt>("/api/withdrawals", {
         method: "POST",
-        body: { accountNo: account.accountNo, ...values },
+        // what the cashier confirmed — the server refuses (409) if today's terms differ
+        body: { accountNo: account.accountNo, ...values, expectedType: quote.type, expectedPenalty: quote.penalty },
       });
+      setQuote(null);
       setReceipt(result);
-      setAccount((a) =>
-        a && {
-          ...a,
-          balance: result.balance,
-          withdrawalCount: a.withdrawalCount + 1,
-          totalWithdrawn: (Number(a.totalWithdrawn) + Number(result.amount)).toFixed(2),
-          lastWithdrawalAt: result.withdrawnAt,
-        },
-      );
       setValues(EMPTY);
       onWithdrawn();
+      // Balance, principal / interest and the deposit cycle all changed — reload them.
+      authFetch<WithdrawalAccount>(`/api/withdrawals/accounts/${account.accountNo}`).then(setAccount, () => {});
     } catch (err) {
-      if (err instanceof ApiError && err.code === "VALIDATION_ERROR") setErrors(err.details as Errors);
-      setFormError(errorMessage(err));
-      // The balance may have changed meanwhile (another desk) — refresh it.
-      if (err instanceof ApiError && err.details.amount) {
-        authFetch<WithdrawalAccount>(`/api/withdrawals/accounts/${account.accountNo}`).then(setAccount, () => {});
-      }
+      setQuote(null);
+      failed(err);
     } finally {
       setSaving(false);
     }
   };
 
+  /** Show the error on the form; the balance, cycle or penalty may have changed meanwhile — refresh them. */
+  function failed(err: unknown) {
+    if (err instanceof ApiError && (err.code === "VALIDATION_ERROR" || err.code === "PENALTY_OUTSTANDING")) {
+      setErrors(err.details as Errors);
+    }
+    setFormError(errorMessage(err));
+    if (account && err instanceof ApiError && (err.details.amount || err.code === "WITHDRAWAL_TERMS_CHANGED")) {
+      authFetch<WithdrawalAccount>(`/api/withdrawals/accounts/${account.accountNo}`).then(setAccount, () => {});
+    }
+  }
+
   return (
     <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 lg:p-6">
+      {quote && (
+        <WithdrawalConfirmDialog
+          quote={quote}
+          mode={values.mode}
+          referenceNo={values.referenceNo}
+          saving={saving}
+          onConfirm={pay}
+          onCancel={() => setQuote(null)}
+        />
+      )}
       <h2 className="flex items-center gap-3 text-lg font-semibold text-navy">
         <Icon name="upload" className="size-6 text-amber-600" /> Withdraw Amount
       </h2>
@@ -236,23 +271,45 @@ function WithdrawalDesk({
                 <b className="text-lg text-emerald-700">{money(account.balance)}</b>
               </span>
               <span className="self-end text-xs text-slate-500">
-                Deposited {money(account.totalDeposited)} · Withdrawn {money(account.totalWithdrawn)}
-                {account.lastWithdrawalAt && ` · last withdrawal ${formatDateTime(account.lastWithdrawalAt)}`}
+                Principal {money(account.principalBalance)} + Interest {money(account.accruedInterest)}
               </span>
             </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Deposited {money(account.totalDeposited)} · Withdrawn {money(account.totalWithdrawn)}
+              {account.lastWithdrawalAt && ` · last withdrawal ${formatDateTime(account.lastWithdrawalAt)}`}
+            </p>
           </div>
         </div>
+      )}
+
+      {account && terms && <CycleStatus account={account} />}
+
+      {account && terms && !terms.allowed && account.cycle && (
+        <PenaltyDesk
+          account={account}
+          onPaid={() =>
+            authFetch<WithdrawalAccount>(`/api/withdrawals/accounts/${account.accountNo}`).then(setAccount, () => {})
+          }
+        />
       )}
 
       {receipt && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <p className="flex items-center gap-2 font-semibold">
-            <Icon name="checkCircle" className="size-5" /> Withdrawal recorded — pay out {money(receipt.amount)}
+            <Icon name="checkCircle" className="size-5" /> Withdrawal recorded — pay out {money(receipt.netAmount)}
           </p>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
             <ReceiptItem label="Receipt No." value={receipt.receiptNo} mono />
-            <ReceiptItem label="Amount" value={money(receipt.amount)} />
+            <ReceiptItem label="Type" value={receipt.type === "EARLY" ? "Early" : "Normal"} />
+            <ReceiptItem label="Balance Before" value={money(receipt.balanceBefore)} />
+            <ReceiptItem label="Withdrawn" value={money(receipt.amount)} />
+            <ReceiptItem
+              label={`Deduction (${Number(receipt.penaltyRate)}%)`}
+              value={Number(receipt.penalty) > 0 ? `−${money(receipt.penalty)}` : money(receipt.penalty)}
+            />
+            <ReceiptItem label="Paid Out" value={money(receipt.netAmount)} />
             <ReceiptItem label="Balance Left" value={money(receipt.balance)} />
+            <ReceiptItem label="Next Normal Withdrawal" value={formatDate(receipt.nextWithdrawalOn)} />
             <ReceiptItem label="Mode" value={modeLabel(receipt.mode)} />
             <ReceiptItem label="Reference" value={receipt.referenceNo ?? "—"} mono />
             <ReceiptItem label="Date" value={formatDateTime(receipt.withdrawnAt)} />
@@ -265,7 +322,7 @@ function WithdrawalDesk({
       {account &&
         (available <= 0 ? (
           <Alert tone="warning">This account has no balance to withdraw.</Alert>
-        ) : (
+        ) : !terms?.allowed ? null : (
           <form onSubmit={submit} noValidate className="space-y-4 border-t border-slate-100 pt-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -296,7 +353,9 @@ function WithdrawalDesk({
                     <p className={`mt-1 text-xs ${Number(remaining) < 0 ? "text-red-500" : "text-slate-500"}`}>
                       {Number(remaining) < 0
                         ? `Exceeds the available balance by ${money(String(-Number(remaining)))}`
-                        : `Balance after: ${money(remaining)}`}
+                        : early
+                          ? `Deduction ${Number(terms.penaltyRate)}%: ${money(penalty.toFixed(2))} · Pay out ${money(payout ?? "0")} · Balance after ${money(remaining)}`
+                          : `Pay out ${money(payout ?? "0")} · Balance after ${money(remaining)}`}
                     </p>
                   )
                 )}
@@ -351,16 +410,220 @@ function WithdrawalDesk({
               <p className="text-xs text-slate-500">Withdrawals can&apos;t be edited or deleted once recorded.</p>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || quoting}
                 className="flex h-10 items-center gap-2 rounded-lg bg-amber-600 px-7 text-sm font-medium text-white shadow-sm hover:bg-amber-700 disabled:opacity-70"
               >
-                {saving ? <Spinner /> : <Icon name="upload" className="size-4" />}
-                {saving ? "Saving…" : values.amount && amountNum > 0 ? `Withdraw ${money(values.amount)}` : "Withdraw"}
+                {quoting ? <Spinner /> : <Icon name="upload" className="size-4" />}
+                {quoting ? "Checking…" : values.amount && amountNum > 0 ? `Withdraw ${money(values.amount)}` : "Withdraw"}
               </button>
             </div>
           </form>
         ))}
     </section>
+  );
+}
+
+/* ============================ Cycle status ============================ */
+
+/** Deposit cycle summary at the desk: why the withdrawal is NORMAL or EARLY, or blocked. */
+function CycleStatus({ account }: { account: WithdrawalAccount }) {
+  const t = account.withdrawalToday;
+  const c = account.cycle;
+  return (
+    <div className="space-y-3">
+      {c && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-slate-200 p-3 text-xs sm:grid-cols-4">
+          <CycleItem label="Deposit Cycle" value={`${formatDate(c.startOn)} – ${formatDate(c.endOn)}`} />
+          <CycleItem label="Deposit Months" value={`${c.completedMonths}/${c.durationMonths} paid`} />
+          <CycleItem label="Missed Months" value={String(c.missedMonths)} bad={c.missedMonths > 0} />
+          <CycleItem
+            label="Outstanding Penalty"
+            value={money(c.outstandingPenalty)}
+            bad={Number(c.outstandingPenalty) > 0}
+          />
+        </dl>
+      )}
+      {!t.allowed ? (
+        <Alert tone="error">
+          <b>Withdrawal blocked</b>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {t.reasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </Alert>
+      ) : t.type === "EARLY" ? (
+        <Alert tone="warning">
+          <b>Early withdrawal</b> — {Number(t.penaltyRate)}% of the amount withdrawn today is deducted; the full amount
+          leaves the account.
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {t.reasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </Alert>
+      ) : (
+        <Alert tone="info">
+          <b>Normal withdrawal</b> — no deduction. The deposit cycle is complete
+          {c ? ` (${c.completedMonths}/${c.durationMonths} months)` : ""}. A new {account.rules.minDurationMonths}-month
+          cycle starts with this withdrawal.
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+function CycleItem({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
+  return (
+    <div>
+      <dt className="text-slate-500">{label}</dt>
+      <dd className={`font-semibold ${bad ? "text-red-600" : "text-navy"}`}>{value}</dd>
+    </div>
+  );
+}
+
+/* ============================ Penalty desk ============================ */
+
+type PenaltyValues = { amount: string; mode: PaymentMode; referenceNo: string; remarks: string };
+
+/**
+ * Collect the outstanding missed-month penalty. Recorded in its own ledger
+ * with a PEN receipt — not a deposit, and the balance doesn't change.
+ */
+function PenaltyDesk({ account, onPaid }: { account: WithdrawalAccount; onPaid: () => void }) {
+  const { authFetch } = useAuth();
+  const cycle = account.cycle!;
+  const [values, setValues] = useState<PenaltyValues>({
+    amount: Number(cycle.outstandingPenalty).toString(),
+    mode: "CASH",
+    referenceNo: "",
+    remarks: "",
+  });
+  const [errors, setErrors] = useState<Partial<Record<keyof PenaltyValues, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [receipt, setReceipt] = useState<PenaltyReceipt | null>(null);
+  const modeInfo = PAYMENT_MODES.find((m) => m.value === values.mode);
+  const outstanding = Number(cycle.outstandingPenalty);
+  const amountNum = Number(values.amount);
+
+  const set = (field: keyof PenaltyValues) => (value: string) => {
+    setValues((v) => ({ ...v, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+    setFormError(null);
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const found: typeof errors = {};
+    if (!/^\d{1,10}(\.\d{1,2})?$/.test(values.amount) || amountNum <= 0) found.amount = "Enter an amount greater than 0";
+    else if (amountNum > outstanding) found.amount = `More than the outstanding penalty (${money(cycle.outstandingPenalty)})`;
+    if (modeInfo?.reference && !values.referenceNo.trim()) found.referenceNo = `Enter the ${modeInfo.reference}`;
+    setErrors(found);
+    if (Object.keys(found).length) return;
+    if (
+      !window.confirm(
+        `Collect missed-month penalty ${money(values.amount)} (${modeLabel(values.mode)}) from ${account.accountNo} — ${account.name}?\n\n` +
+          `${cycle.missedMonths} missed month(s) × ${money(cycle.penaltyPerMonth)} · outstanding ${money(cycle.outstandingPenalty)}\n` +
+          `This is not a deposit; the account balance does not change.`,
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await authFetch<PenaltyReceipt>("/api/withdrawals/penalties", {
+        method: "POST",
+        body: { accountNo: account.accountNo, ...values },
+      });
+      setReceipt(result);
+      onPaid();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "VALIDATION_ERROR") setErrors(err.details as typeof errors);
+      setFormError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (receipt) {
+    return (
+      <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <p className="flex items-center gap-2 font-semibold">
+          <Icon name="checkCircle" className="size-5" /> Penalty collected — {money(receipt.amount)}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+          <ReceiptItem label="Receipt No." value={receipt.receiptNo} mono />
+          <ReceiptItem label="Missed Months" value={String(receipt.missedMonths)} />
+          <ReceiptItem label="Still Outstanding" value={money(receipt.outstandingAfter)} />
+          <ReceiptItem label="Mode" value={modeLabel(receipt.mode)} />
+          <ReceiptItem label="Date" value={formatDateTime(receipt.paidAt)} />
+          <ReceiptItem label="Collected By" value={receipt.createdBy} />
+        </dl>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="space-y-4 rounded-lg border border-red-200 bg-red-50/40 p-4">
+      <h3 className="text-sm font-semibold text-navy">
+        Collect missed-month penalty — {cycle.missedMonths} × {money(cycle.penaltyPerMonth)} = {money(cycle.totalPenalty)}
+        {Number(cycle.penaltyPaid) > 0 && ` (paid ${money(cycle.penaltyPaid)})`}
+      </h3>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label required>Amount (₹)</Label>
+          <input
+            className={inputCls(errors.amount)}
+            inputMode="decimal"
+            value={values.amount}
+            onChange={(e) => set("amount")(e.target.value.replace(/[^\d.]/g, "").replace(/^(\d*\.\d{0,2}).*$/, "$1"))}
+          />
+          {errors.amount && <p className="mt-1 text-xs text-red-500">{errors.amount}</p>}
+        </div>
+        <div>
+          <Label required>Payment Mode</Label>
+          <select
+            className={inputCls(errors.mode)}
+            value={values.mode}
+            onChange={(e) => {
+              set("mode")(e.target.value);
+              set("referenceNo")("");
+            }}
+          >
+            {PAYMENT_MODES.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {modeInfo?.reference && (
+          <div className="sm:col-span-2">
+            <Label required>{modeInfo.reference}</Label>
+            <input
+              className={`${inputCls(errors.referenceNo)} font-mono`}
+              maxLength={40}
+              value={values.referenceNo}
+              onChange={(e) => set("referenceNo")(e.target.value.replace(/[^A-Za-z0-9/-]/g, ""))}
+            />
+            {errors.referenceNo && <p className="mt-1 text-xs text-red-500">{errors.referenceNo}</p>}
+          </div>
+        )}
+      </div>
+      {formError && <Alert tone="error">{formError}</Alert>}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">Separate receipt; not a deposit and not added to the balance.</p>
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex h-10 items-center gap-2 rounded-lg bg-brand px-6 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-70"
+        >
+          {saving ? <Spinner /> : <Icon name="handCoins" className="size-4" />}
+          {saving ? "Saving…" : `Collect ${money(values.amount || "0")}`}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -453,7 +716,7 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                 <th className="px-4 py-3 font-medium">Receipt / Date</th>
                 <th className="px-4 py-3 font-medium">Account</th>
                 <th className="px-4 py-3 font-medium">Mode</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-4 py-3 text-right font-medium">Amount / Paid</th>
                 <th className="px-4 py-3 text-right font-medium">Balance</th>
               </tr>
             </thead>
@@ -485,7 +748,16 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                     {w.referenceNo && <p className="font-mono text-[11px] text-slate-500">{w.referenceNo}</p>}
                     {w.remarks && <p className="text-[11px] text-slate-500">{w.remarks}</p>}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold whitespace-nowrap text-red-600">−{money(w.amount)}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <p className="font-semibold text-red-600">−{money(w.amount)}</p>
+                    {w.type === "EARLY" ? (
+                      <p className="text-[11px] text-amber-700">
+                        Early −{money(w.penalty)} · paid {money(w.netAmount)}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-500">paid {money(w.netAmount)}</p>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right text-xs whitespace-nowrap text-slate-600">{money(w.balanceAfter)}</td>
                 </tr>
               ))}

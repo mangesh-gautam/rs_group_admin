@@ -12,9 +12,11 @@ import {
 
 const SUPER_ADMIN_NAV: SuperAdminNavItem[] = [
   { label: "Dashboard", href: "/super-admin/dashboard", icon: "home" },
+  { label: "All Accounts", href: "/super-admin/accounts", icon: "users" },
   { label: "Admin Management", href: "/super-admin/admin-management", icon: "users" },
   { label: "Active Sessions", href: "/super-admin/active-sessions", icon: "zap" },
   { label: "Offices", href: "/super-admin/offices", icon: "house" },
+  { label: "Withdrawal Rules", href: "/super-admin/withdrawal-rules", icon: "calendar" },
   { label: "Create Admin", href: "/super-admin/admin-management/create", icon: "userPlus" },
   { label: "Settings", href: "/super-admin/settings", icon: "settings" },
 ];

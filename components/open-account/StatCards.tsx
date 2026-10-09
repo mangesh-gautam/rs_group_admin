@@ -46,7 +46,7 @@ const TONES: Record<
 
 export function StatCards({ stats }: { stats: Stat[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-3 ${stats.length === 6 ? "md:grid-cols-3" : "md:grid-cols-4"}`}>
       {stats.map((s) => {
         const t = TONES[s.tone];
         return (
@@ -61,7 +61,7 @@ export function StatCards({ stats }: { stats: Stat[] }) {
             </span>
             <p className={`mt-3 text-xs font-medium ${t.label}`}>{s.label}</p>
             <p
-              className={`mt-0.5 text-base font-bold whitespace-nowrap 2xl:text-xl ${t.value}`}
+              className={`mt-0.5 break-words text-base font-bold 2xl:text-xl ${t.value}`}
             >
               {s.value}
             </p>

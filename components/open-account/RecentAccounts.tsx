@@ -1,20 +1,9 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
+import { formatDateTime } from "@/lib/auth/types";
+import type { Dashboard } from "@/lib/dashboard/types";
 
-export type RecentAccount = {
-  accountNo: string;
-  name: string;
-  type: string;
-  deposit: number;
-  status: "Active" | "Pending" | "Closed";
-  date: string;
-};
-
-const STATUS_STYLES: Record<RecentAccount["status"], string> = {
-  Active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  Pending: "bg-amber-50 text-amber-700 ring-amber-200",
-  Closed: "bg-slate-100 text-slate-600 ring-slate-200",
-};
+export type RecentAccount = Dashboard["recentAccounts"][number];
 
 export function RecentAccounts({ accounts }: { accounts: RecentAccount[] }) {
   return (
@@ -38,30 +27,23 @@ export function RecentAccounts({ accounts }: { accounts: RecentAccount[] }) {
               <th className="px-2 py-2 font-medium">Account No.</th>
               <th className="px-2 py-2 font-medium">Name</th>
               <th className="px-2 py-2 font-medium">Type</th>
-              <th className="px-2 py-2 font-medium">Deposit Amount</th>
-              <th className="px-2 py-2 font-medium">Status</th>
-              <th className="px-2 py-2 font-medium">Date</th>
+              <th className="px-2 py-2 font-medium">Balance</th>
+              <th className="px-2 py-2 font-medium">Opened</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
             {accounts.map((a) => (
               <tr key={a.accountNo}>
-                <td className="px-2 py-2.5">{a.accountNo}</td>
+                <td className="px-2 py-2.5"><Link href={`/admin/accounts/${a.accountNo}`} className="font-medium text-brand hover:underline">{a.accountNo}</Link></td>
                 <td className="px-2 py-2.5">{a.name}</td>
-                <td className="px-2 py-2.5">{a.type}</td>
+                <td className="px-2 py-2.5">{a.accountType.charAt(0) + a.accountType.slice(1).toLowerCase()}</td>
                 <td className="px-2 py-2.5">
-                  ₹ {a.deposit.toLocaleString("en-IN")}
+                  ₹ {Number(a.balance).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </td>
-                <td className="px-2 py-2.5">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${STATUS_STYLES[a.status]}`}
-                  >
-                    {a.status}
-                  </span>
-                </td>
-                <td className="px-2 py-2.5">{a.date}</td>
+                <td className="px-2 py-2.5">{formatDateTime(a.createdAt)}</td>
               </tr>
             ))}
+            {accounts.length === 0 && <tr><td colSpan={5} className="px-2 py-6 text-center text-slate-500">No accounts yet.</td></tr>}
           </tbody>
         </table>
       </div>

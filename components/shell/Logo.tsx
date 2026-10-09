@@ -17,14 +17,14 @@ export function Logo({ href = "/", compact = false, hideWordmarkOnTiny = false }
         src={logo}
         alt="RS Group Society logo"
         priority
-        className="h-9 w-auto sm:h-11"
+        className="h-8 w-auto shrink-0 sm:h-11"
       />
       {!compact && (
-        <div className={`leading-tight whitespace-nowrap ${hideWordmarkOnTiny ? "max-[359px]:hidden" : ""}`}>
-          <p className="text-base font-bold tracking-tight text-navy sm:text-lg">
+        <div className={`min-w-0 leading-tight ${hideWordmarkOnTiny ? "max-[359px]:hidden" : ""}`}>
+          <p className="truncate text-sm font-bold tracking-tight text-navy sm:text-lg">
             RS Group Society
           </p>
-          <p className="text-[10px] font-medium text-slate-600 sm:text-[11px]">
+          <p className="hidden truncate text-[10px] font-medium text-slate-600 min-[400px]:block sm:text-[11px]">
             Secure <span className="mx-0.5">•</span> Grow{" "}
             <span className="mx-0.5">•</span> Build Together
           </p>

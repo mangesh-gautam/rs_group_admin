@@ -10,29 +10,29 @@ import { formatDateTime } from "@/lib/auth/types";
 import type { StatementPage, StatementType } from "@/lib/accounts/types";
 import { DEPOSIT_MODES as PAYMENT_MODES, modeLabel, money, type DepositMode } from "@/lib/deposits/types";
 
+import { TransactionCsvExporter } from "@/lib/accounts/TransactionCsvExporter";
+
 const PAGE_SIZE = 20;
+const exporter = new TransactionCsvExporter();
 
 /**
- * Account details → the account statement, newest first, like a passbook:
+ * Shared role-aware account statement, newest first, like a passbook:
  * deposits (credit), withdrawals (debit) and the balance right after each
- * entry (GET /api/customers/account-holders/:accountNo/transactions).
+ * entry (GET /api/admin/accounts/:accountNo/transactions).
  */
-export function AccountTransactions({
-  accountNo,
-  balance,
-  totalDeposited,
-  totalWithdrawn,
-  entryCount,
-  lastAt,
-}: {
-  accountNo: string;
-  balance: string;
-  totalDeposited: string;
-  totalWithdrawn: string;
-  entryCount: number;
-  lastAt: string | null;
-}) {
+export function AccountTransactions({ accountNo }: { accountNo: string }) {
   const { authFetch } = useAuth();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const completeExport = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const report = await authFetch<StatementPage>(`/api/admin/accounts/${encodeURIComponent(accountNo)}/transactions/export`);
+      exporter.download(accountNo, report);
+    } catch (err) { setExportError(errorMessage(err)); }
+    finally { setExporting(false); }
+  };
   const [type, setType] = useState<StatementType | "">("");
   const [mode, setMode] = useState<DepositMode | "">("");
   const [page, setPage] = useState(1);
@@ -50,7 +50,7 @@ export function AccountTransactions({
     if (type) params.set("type", type);
     if (mode) params.set("mode", mode);
     authFetch<StatementPage>(
-      `/api/customers/account-holders/${encodeURIComponent(accountNo)}/transactions?${params}`,
+      `/api/admin/accounts/${encodeURIComponent(accountNo)}/transactions?${params}`,
       { signal: controller.signal },
     ).then(
       (data) => setResult({ key, data, error: null }),
@@ -111,6 +111,10 @@ export function AccountTransactions({
         >
           <Icon name="refresh" className="size-4" /> Refresh
         </button>
+        <button type="button" onClick={completeExport} disabled={exporting}
+          className="flex min-h-9 items-center gap-1.5 rounded-lg border border-brand px-3 text-sm text-brand disabled:opacity-50">
+          <Icon name="download" className="size-4" /> {exporting ? "Exporting…" : "Export all transactions"}
+        </button>
         <Link
           href={`/admin/deposits?accountNo=${accountNo}`}
           className="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
@@ -125,14 +129,15 @@ export function AccountTransactions({
         </Link>
       </div>
 
-      {/* Summary strip */}
-      <dl className="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 lg:grid-cols-5">
-        <Stat label="Current Balance" value={money(balance)} strong />
-        <Stat label="Total Deposited" value={money(totalDeposited)} tone="text-emerald-700" />
-        <Stat label="Total Withdrawn" value={money(totalWithdrawn)} tone="text-red-600" />
-        <Stat label="Entries" value={String(entryCount)} />
-        <Stat label="Last Transaction" value={lastAt ? formatDateTime(lastAt) : "—"} />
-      </dl>
+      {exportError && <div className="p-4"><Alert tone="error">{exportError}</Alert></div>}
+      {/* Super Admin summary, provided by the same role-aware API. */}
+      {data?.summary && <dl className="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 lg:grid-cols-5">
+        <Stat label="Current Balance" value={money(data.summary.balance)} strong />
+        <Stat label="Total Deposited" value={money(data.summary.totalDeposited)} tone="text-emerald-700" />
+        <Stat label="Total Withdrawn" value={money(data.summary.totalWithdrawn)} tone="text-red-600" />
+        <Stat label="Entries" value={String(data.summary.entryCount)} />
+        <Stat label="Last Transaction" value={data.summary.lastAt ? formatDateTime(data.summary.lastAt) : "—"} />
+      </dl>}
 
       {result.error && !loading ? (
         <div className="p-5">
@@ -155,7 +160,8 @@ export function AccountTransactions({
                   <p className="text-xs text-slate-500">
                     {formatDateTime(t.at)} · {modeLabel(t.mode)}
                   </p>
-                  <p className="font-mono text-[11px] text-slate-400">
+                  <p className="break-words text-xs text-slate-500">By {t.createdBy}{t.operator ? ` · ${t.operator.username ?? "System"} · ${t.operator.role}` : ""}</p>
+                  <p className="break-all font-mono text-[11px] text-slate-400">
                     {t.receiptNo}
                     {t.referenceNo && ` · ${t.referenceNo}`}
                   </p>
@@ -211,7 +217,10 @@ export function AccountTransactions({
                       {modeLabel(t.mode)}
                       {t.referenceNo && <span className="block font-mono text-[11px] text-slate-500">{t.referenceNo}</span>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{t.createdBy}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{t.createdBy}
+                      {t.operator && <span className="block text-[11px] text-slate-500">{t.operator.username ?? "System"} · {t.operator.role}{t.operator.id ? ` · #${t.operator.id}` : ""}</span>}
+                      {t.office && <span className="block text-[11px] text-slate-500">{t.office.city} – {t.office.name}</span>}
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold whitespace-nowrap text-red-600">
                       {t.type === "WITHDRAWAL" ? `−${money(t.debit)}` : ""}
                     </td>

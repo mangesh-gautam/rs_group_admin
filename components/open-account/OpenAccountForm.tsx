@@ -263,7 +263,7 @@ export function OpenAccountForm() {
       key={formKey}
       onSubmit={handleSubmit}
       noValidate
-      className="rounded-xl border border-slate-200 bg-white p-5 lg:p-6"
+      className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-5 lg:p-6"
     >
       {created && (
         <div
@@ -388,19 +388,29 @@ export function OpenAccountForm() {
 
       <hr className="my-6 border-slate-100" />
 
-      {/* ---------------- Bank & amount ---------------- */}
-      <SectionTitle icon="wallet">Bank Details &amp; Amount</SectionTitle>
+      {/* ---------------- Bank details ---------------- */}
+      <SectionTitle icon="wallet">Bank Details</SectionTitle>
       <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         {text("bankName", "Bank Name", { placeholder: "Bank name" })}
         {text("bankAccountNo", "A/c No.", { inputMode: "numeric", placeholder: "Account number", clean: digits(18) })}
         {text("ifscCode", "IFSC Code", { placeholder: "SBIN0001234", clean: upper(11), className: "font-mono" })}
         {text("branch", "Branch", { placeholder: "Branch" })}
+      </div>
+
+      <hr className="my-6 border-slate-100" />
+      <SectionTitle icon="wallet">Amount</SectionTitle>
+      <div className="mt-5 max-w-md">
         {text("amount", "Amount (₹)", {
           required: true,
           inputMode: "decimal",
           placeholder: "e.g. 5000",
           clean: (v) => v.replace(/[^\d.]/g, "").replace(/^(\d*\.\d{0,2}).*$/, "$1"),
         })}
+      </div>
+
+      <hr className="my-6 border-slate-100" />
+      <SectionTitle icon="wallet">Account Type</SectionTitle>
+      <div className="mt-5 max-w-md">
         <Field label="Account Type" required error={errors.accountType}>
           <select
             className={`${inputCls(errors.accountType)} ${values.accountType ? "" : "text-slate-400"}`}
@@ -413,12 +423,28 @@ export function OpenAccountForm() {
             ))}
           </select>
         </Field>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Installments fall due daily, every 7 days, or monthly, counted from the opening day.
+      </p>
+
+      <hr className="my-6 border-slate-100" />
+      <SectionTitle icon="wallet">Interest</SectionTitle>
+      <div className="mt-5 max-w-md">
         {text("interestRate", "Interest Rate (% per month)", {
           required: true,
           inputMode: "decimal",
           placeholder: "e.g. 0.75",
           clean: (v) => v.replace(/[^\d.]/g, "").replace(/^(\d*\.\d{0,2}).*$/, "$1"),
         })}
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Interest is calculated on the month-end balance and credited after the month closes.
+      </p>
+
+      <hr className="my-6 border-slate-100" />
+      <SectionTitle icon="wallet">Buffer</SectionTitle>
+      <div className="mt-5 max-w-md">
         {text("bufferDays", "Buffer Days (before fine)", {
           required: true,
           inputMode: "numeric",
@@ -427,9 +453,7 @@ export function OpenAccountForm() {
         })}
       </div>
       <p className="mt-2 text-xs text-slate-500">
-        Account type sets how often an installment falls due (every day, every 7 days or every month, counted
-        from the opening day). Interest is credited every month on the opening day. A fine applies when an
-        installment isn&apos;t paid within the buffer days.
+        Grace period after an installment falls due, before it is marked as fine applicable.
       </p>
 
       <hr className="my-6 border-slate-100" />
@@ -455,20 +479,20 @@ export function OpenAccountForm() {
       {/* ---------------- Documents ---------------- */}
       <div className="mt-6 rounded-xl border border-blue-100 bg-slate-50/70 p-4">
         <div className="mb-3 flex items-start gap-3">
-          <Icon name="fileText" className="mt-0.5 size-5 text-brand" />
+          <Icon name="fileText" className="mt-0.5 size-5 shrink-0 text-brand" />
           <div>
             <p className="text-sm font-semibold text-navy">Documents</p>
             <p className="text-xs text-slate-600">Self-attested copies, as listed on the registration form</p>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
           {DOCUMENTS.map((doc) => {
             const file = files[doc.key];
             const err = errors[doc.key];
             return (
               <label
                 key={doc.key}
-                className={`flex cursor-pointer items-center gap-3 rounded-lg border border-dashed bg-white p-3 transition hover:border-brand/50 ${
+                className={`grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border border-dashed bg-white p-3 transition hover:border-brand/50 ${
                   err ? "border-red-300" : file ? "border-emerald-300" : "border-slate-300"
                 }`}
               >
@@ -479,11 +503,11 @@ export function OpenAccountForm() {
                   <span className="block text-sm font-medium text-navy">
                     {doc.label}<span className="text-red-500"> *</span>
                   </span>
-                  <span className={`block truncate text-xs ${err ? "text-red-500" : file ? "text-emerald-700" : "text-slate-500"}`}>
+                  <span className={`block break-words text-xs ${err ? "text-red-500" : file ? "text-emerald-700" : "text-slate-500"}`}>
                     {err ?? file?.name ?? doc.hint}
                   </span>
                 </span>
-                <span className="shrink-0 rounded border border-slate-200 px-3 py-1 text-xs text-brand">
+                <span className="col-span-2 flex min-h-10 items-center justify-center rounded border border-slate-200 px-3 py-2 text-xs text-brand">
                   {file ? "Change" : "Choose file"}
                 </span>
                 <input
@@ -583,11 +607,11 @@ function SuperAdminOfficePicker({
   return (
     <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-        <label className="flex items-center gap-2 font-medium text-navy">
+        <label className="flex w-full min-w-0 flex-wrap items-center gap-2 font-medium text-navy sm:w-auto">
           <Icon name="house" className="size-4 text-brand" />
           Office<span className="text-red-500">*</span>
           <select
-            className={`${inputCls(error)} w-56 font-normal ${officeId ? "" : "text-slate-400"}`}
+            className={`${inputCls(error)} min-w-0 flex-1 sm:w-56 sm:flex-none font-normal ${officeId ? "" : "text-slate-400"}`}
             value={officeId}
             onChange={(e) => onChange(e.target.value)}
             disabled={!offices}

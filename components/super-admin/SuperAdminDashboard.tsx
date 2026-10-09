@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/auth/types";
 import { PasswordStateBadge, StatusBadge } from "./AdminBadges";
 import { useActiveSessions } from "./useActiveSessions";
 import { useAdmins } from "./useAdmins";
+import { DashboardOverview } from "@/components/admin/DashboardOverview";
 
 export function SuperAdminDashboard() {
   const { user } = useAuth();
@@ -111,6 +112,8 @@ export function SuperAdminDashboard() {
           );
         })}
       </div>
+
+      <DashboardOverview />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">

@@ -72,9 +72,11 @@ export type StatementEntry = {
   balanceAfter: string; // derived at read time over the whole ledger
   at: string;
   createdBy: string;
+  operator?: { id: number | null; name: string; username: string | null; role: string };
+  office?: { id: number; name: string; city: string };
 };
 
-export type StatementPage = { page: number; pageSize: number; total: number; items: StatementEntry[] };
+export type StatementPage = { page: number; pageSize: number; total: number; items: StatementEntry[]; summary?: { balance: string; totalDeposited: string; totalWithdrawn: string; entryCount: number; lastAt: string | null } };
 
 /** Row of GET /api/customers/account-holders/:accountNo/installments (newest first). */
 export type Installment = {

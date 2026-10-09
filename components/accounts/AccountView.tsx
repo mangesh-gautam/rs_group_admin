@@ -20,6 +20,7 @@ import { formatDateTime, officeLabel } from "@/lib/auth/types";
 import { AccountInstallments } from "./AccountInstallments";
 import { AccountMonthlyInterest } from "./AccountMonthlyInterest";
 import { AccountTransactions } from "./AccountTransactions";
+import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
 
 const DOC_LABEL: Record<DocumentKind, string> = {
   panCard: "PAN Card copy",
@@ -188,18 +189,13 @@ export function AccountView({ accountNo }: { accountNo: string }) {
         </Section>
       </div>
 
+      <AccountWithdrawalCycle accountNo={a.accountNo} />
+
       <AccountMonthlyInterest accountNo={a.accountNo} />
 
       <AccountInstallments accountNo={a.accountNo} totalInterest={a.totalInterest} />
 
-      <AccountTransactions
-        accountNo={a.accountNo}
-        balance={a.balance}
-        totalDeposited={a.totalDeposited}
-        totalWithdrawn={a.totalWithdrawn}
-        entryCount={a.depositCount + a.withdrawalCount}
-        lastAt={latest(a.lastDepositAt, a.lastWithdrawalAt)}
-      />
+      <AccountTransactions accountNo={a.accountNo} />
 
       {viewing && (
         <DocumentViewer
@@ -214,8 +210,6 @@ export function AccountView({ accountNo }: { accountNo: string }) {
 }
 
 /* ------------------------------ building blocks ------------------------------ */
-
-const latest = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
 
 function BackLink() {
   return (

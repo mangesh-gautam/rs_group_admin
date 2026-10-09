@@ -18,7 +18,7 @@ const PAGE_SIZE = 20;
  * an Admin sees only accounts opened at their own office (enforced by the API).
  * Clicking a row opens the account.
  */
-export function AccountList() {
+export function AccountList({ basePath = "/admin/accounts" }: { basePath?: string }) {
   const router = useRouter();
   const { authFetch, user } = useAuth();
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
@@ -48,7 +48,7 @@ export function AccountList() {
     const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
     if (q) params.set("q", q);
     if (officeId) params.set("officeId", officeId);
-    authFetch<AccountPage>(`/api/customers/account-holders?${params}`, { signal: controller.signal }).then(
+    authFetch<AccountPage>(`/api/admin/accounts?${params}`, { signal: controller.signal }).then(
       (data) => setResult({ key, data, error: null }),
       (err) => {
         if ((err as Error).name !== "AbortError") setResult((r) => ({ key, data: r.data, error: errorMessage(err) }));
@@ -60,7 +60,7 @@ export function AccountList() {
   const loading = result.key !== key;
   const data = result.data;
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-  const open = (accountNo: string) => router.push(`/admin/accounts/${accountNo}`);
+  const open = (accountNo: string) => router.push(`${basePath}/${accountNo}`);
   const filtered = !!(q || officeId);
 
   return (
@@ -131,7 +131,7 @@ export function AccountList() {
               {loading && !data && <SkeletonItems as="li" />}
               {data?.items.map((a) => (
                 <li key={a.id}>
-                  <Link href={`/admin/accounts/${a.accountNo}`} className="flex items-start gap-3 p-4 active:bg-slate-50">
+                  <Link href={`${basePath}/${a.accountNo}`} className="flex items-start gap-3 p-4 active:bg-slate-50">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-navy">{a.name}</p>
                       <p className="font-mono text-xs text-slate-600">{a.accountNo}</p>

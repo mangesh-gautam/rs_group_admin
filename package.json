@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "debug": "next dev --inspect=127.0.0.1:9240 --webpack --port 3003 --hostname 127.0.0.1"
   },
   "dependencies": {
     "next": "16.3.6",

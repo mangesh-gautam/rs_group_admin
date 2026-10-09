@@ -20,7 +20,7 @@ export function AdminHeader({ notificationCount }: { notificationCount: number }
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-6 sm:px-4 lg:px-6">
       <MobileNavButton />
-      <div className="min-w-0 shrink-0 lg:w-56">
+      <div className="min-w-0 flex-1 md:flex-none lg:w-56">
         <Logo href="/admin/dashboard" hideWordmarkOnTiny />
       </div>
 
@@ -37,7 +37,7 @@ export function AdminHeader({ notificationCount }: { notificationCount: number }
         />
       </label>
 
-      <div className="ml-auto flex items-center gap-1 sm:gap-5">
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-5">
         <button
           type="button"
           className="relative rounded-full p-2 text-slate-600 hover:bg-slate-100"
