@@ -1,8 +1,9 @@
 "use client";
 
+import { DetailSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { Alert, Spinner } from "@/components/auth/FormControls";
+import { Alert } from "@/components/auth/FormControls";
 import { Icon, type IconName } from "@/components/icons";
 import {
   SEX_LABEL,
@@ -21,6 +22,9 @@ import { AccountInstallments } from "./AccountInstallments";
 import { AccountMonthlyInterest } from "./AccountMonthlyInterest";
 import { AccountTransactions } from "./AccountTransactions";
 import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
+import { DocumentViewer } from "./DocumentViewer";
+import { KycDialog } from "@/components/kyc/KycDialog";
+import { KycStatusBadge } from "@/components/kyc/KycStatusBadge";
 
 const DOC_LABEL: Record<DocumentKind, string> = {
   panCard: "PAN Card copy",
@@ -33,6 +37,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
   const [account, setAccount] = useState<AccountDetail | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [viewing, setViewing] = useState<DocumentKind | null>(null);
+  const [kycOpen, setKycOpen] = useState(false);
+  const [version, setVersion] = useState(0); // bumped after a KYC change to reload the account
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,7 +48,7 @@ export function AccountView({ accountNo }: { accountNo: string }) {
       if ((err as Error).name !== "AbortError") setError(err);
     });
     return () => controller.abort();
-  }, [authFetch, accountNo]);
+  }, [authFetch, accountNo, version]);
 
   if (error) {
     const notFound = error instanceof ApiError && error.status === 404;
@@ -55,22 +61,38 @@ export function AccountView({ accountNo }: { accountNo: string }) {
       </div>
     );
   }
-  if (!account) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-4">
-        <div className="h-6 w-40 animate-pulse rounded bg-white" />
-        <div className="h-40 animate-pulse rounded-2xl bg-white" />
-        <div className="h-72 animate-pulse rounded-2xl bg-white" />
-      </div>
-    );
-  }
+  if (!account) return <div className="mx-auto max-w-6xl"><DetailSkeleton /></div>;
 
   const a = account;
   const age = ageFrom(a.dob);
+  const kycVerified = a.kyc.status === "VERIFIED";
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <BackLink />
+
+      {!kycVerified && (
+        <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 ${
+          a.kyc.status === "SUBMITTED" ? "border-blue-200 bg-blue-50" : a.kyc.status === "REJECTED" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+          <div className="flex items-start gap-3">
+            <Icon name="shieldCheck" className="mt-0.5 size-5 shrink-0 text-amber-600" />
+            <div className="text-sm">
+              <p className="font-semibold text-navy">
+                {a.kyc.status === "SUBMITTED" ? "KYC documents are waiting for approval" : a.kyc.status === "REJECTED" ? "KYC documents were rejected" : "KYC is pending"}
+              </p>
+              <p className="text-slate-700">
+                {a.kyc.status === "REJECTED" && a.kyc.remarks ? `${a.kyc.remarks}. ` : ""}
+                {!a.panNo && !a.aadhaarNo ? "PAN and Aadhaar have not been given. " : !a.kyc.panVerified && !a.panNo ? "PAN has not been given. " : !a.kyc.aadhaarVerified && !a.aadhaarNo ? "Aadhaar has not been given. " : ""}
+                This account can deposit, but cannot withdraw until KYC is verified.
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={() => setKycOpen(true)}
+            className="flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark">
+            <Icon name="shieldCheck" className="size-4" /> {a.kyc.status === "SUBMITTED" ? "Review documents" : "Complete KYC"}
+          </button>
+        </div>
+      )}
 
       {/* ------------------------------ Header ------------------------------ */}
       <section className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:p-6">
@@ -81,7 +103,9 @@ export function AccountView({ accountNo }: { accountNo: string }) {
           className="aspect-[35/45] w-28 shrink-0 rounded-lg border border-slate-200 bg-slate-50 object-cover"
         />
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold break-words text-navy sm:text-3xl">{a.name}</h1>
+          <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-bold break-words text-navy sm:text-3xl">
+            {a.name} <KycStatusBadge status={a.kyc.status} className="text-xs" />
+          </h1>
           {a.fatherHusbandName && <p className="mt-0.5 text-sm text-slate-600">C/o {a.fatherHusbandName}</p>}
           <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-sm">
             <HeaderStat label="Account No." value={a.accountNo} mono />
@@ -97,12 +121,21 @@ export function AccountView({ accountNo }: { accountNo: string }) {
           >
             <Icon name="download" className="size-4" /> Deposit
           </Link>
-          <Link
-            href={`/admin/withdrawals?accountNo=${a.accountNo}`}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-amber-700"
-          >
-            <Icon name="upload" className="size-4" /> Withdraw
-          </Link>
+          {kycVerified ? (
+            <Link
+              href={`/admin/withdrawals?accountNo=${a.accountNo}`}
+              className="flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-amber-700"
+            >
+              <Icon name="upload" className="size-4" /> Withdraw
+            </Link>
+          ) : (
+            <span
+              title="Withdrawals are blocked until KYC is verified"
+              className="flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-slate-200 px-5 text-sm font-medium text-slate-500"
+            >
+              <Icon name="lock" className="size-4" /> Withdraw
+            </span>
+          )}
           <Link
             href={`/forms/account-holder-registration/${a.accountNo}?download=1`}
             target="_blank"
@@ -116,6 +149,7 @@ export function AccountView({ accountNo }: { accountNo: string }) {
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <Section icon="user" title="Personal Details">
           <Item label="Name" value={a.name} />
+          <Item label="Last Name" value={a.lastName} />
           <Item label="Father's / Husband's Name" value={a.fatherHusbandName} />
           <Item label="Date of Birth" value={`${formatDate(a.dob)} (${age} yrs)`} />
           <Item label="Sex" value={SEX_LABEL[a.sex]} />
@@ -136,12 +170,29 @@ export function AccountView({ accountNo }: { accountNo: string }) {
         </Section>
 
         <Section icon="idCard" title="KYC">
-          <Item label="PAN No." value={a.panNo} mono />
-          <Item label="Aadhaar No." value={formatAadhaar(a.aadhaarNo)} mono />
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">Status</dt>
+            <dd className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+              <KycStatusBadge status={a.kyc.status} />
+              {a.kyc.verifiedAt && kycVerified && (
+                <span className="text-xs text-slate-500">
+                  {a.kyc.verifiedBy ? `by ${a.kyc.verifiedBy} · ` : ""}{formatDateTime(a.kyc.verifiedAt)}
+                </span>
+              )}
+              {!kycVerified && (
+                <button type="button" onClick={() => setKycOpen(true)} className="text-xs font-medium text-brand hover:underline">
+                  {a.kyc.status === "SUBMITTED" ? "Review documents" : "Complete KYC"}
+                </button>
+              )}
+            </dd>
+          </div>
+          <Item label={`PAN No.${a.panNo ? (a.kyc.panVerified ? " · verified" : " · to review") : ""}`} value={a.panNo ?? "Not given yet"} mono={!!a.panNo} />
+          <Item label={`Aadhaar No.${a.aadhaarNo ? (a.kyc.aadhaarVerified ? " · verified" : " · to review") : ""}`} value={a.aadhaarNo ? formatAadhaar(a.aadhaarNo) : "Not given yet"} mono={!!a.aadhaarNo} />
           <div className="sm:col-span-2">
             <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">Documents</dt>
             <dd className="mt-2 flex flex-wrap gap-2">
-              {(["panCard", "aadhaarCard"] as const).map((kind) => (
+              {!a.documents.panCard.mime && !a.documents.aadhaarCard.mime && <span className="text-sm text-slate-400">No documents uploaded yet</span>}
+              {(["panCard", "aadhaarCard"] as const).filter((kind) => a.documents[kind].mime).map((kind) => (
                 <button
                   key={kind}
                   type="button"
@@ -197,6 +248,27 @@ export function AccountView({ accountNo }: { accountNo: string }) {
 
       <AccountTransactions accountNo={a.accountNo} />
 
+      {kycOpen && (
+        <KycDialog
+          account={{
+            accountNo: a.accountNo,
+            name: a.name,
+            mobileNumber: a.mobileNumber,
+            panNo: a.panNo,
+            aadhaarNo: a.aadhaarNo,
+            panKyc: a.kyc.panVerified,
+            aadhaarKyc: a.kyc.aadhaarVerified,
+            remarks: a.kyc.remarks,
+            status: a.kyc.status,
+          }}
+          onClose={() => setKycOpen(false)}
+          onDone={() => {
+            setKycOpen(false);
+            setVersion((v) => v + 1);
+          }}
+        />
+      )}
+
       {viewing && (
         <DocumentViewer
           accountNo={a.accountNo}
@@ -246,100 +318,6 @@ function Item({ label, value, mono, wide }: { label: string; value: string | nul
       <dd className={`mt-1 text-sm break-words ${value ? "text-navy" : "text-slate-400"} ${mono && value ? "font-mono" : ""}`}>
         {value || "—"}
       </dd>
-    </div>
-  );
-}
-
-/**
- * Loads a PAN / Aadhaar copy on demand (each view is audit-logged by the API)
- * and shows it in a dialog. Data URLs are turned into blob URLs so PDFs can
- * be displayed in an iframe.
- */
-function DocumentViewer({
-  accountNo,
-  kind,
-  title,
-  onClose,
-}: {
-  accountNo: string;
-  kind: DocumentKind;
-  title: string;
-  onClose: () => void;
-}) {
-  const { authFetch } = useAuth();
-  const [doc, setDoc] = useState<{ url: string; mime: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let url: string | null = null;
-    authFetch<{ mime: string; dataUrl: string }>(
-      `/api/customers/account-holders/${encodeURIComponent(accountNo)}/documents/${kind}`,
-      { signal: controller.signal },
-    )
-      .then(async (res) => {
-        const blob = await (await fetch(res.dataUrl)).blob();
-        url = URL.createObjectURL(blob);
-        setDoc({ url, mime: res.mime });
-      })
-      .catch((err) => {
-        if ((err as Error).name !== "AbortError") setError(errorMessage(err));
-      });
-    return () => {
-      controller.abort();
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [authFetch, accountNo, kind]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-          <h2 className="truncate font-semibold text-navy">{title}</h2>
-          <div className="flex items-center gap-2">
-            {doc && (
-              <a
-                href={doc.url}
-                target="_blank"
-                rel="noopener"
-                className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-medium text-navy hover:bg-slate-50"
-              >
-                <Icon name="download" className="size-3.5" /> Open in new tab
-              </a>
-            )}
-            <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
-              <Icon name="x" className="size-5" />
-            </button>
-          </div>
-        </div>
-        <div className="grid min-h-[50vh] flex-1 place-items-center overflow-auto bg-slate-100 p-4">
-          {error ? (
-            <Alert tone="error">{error}</Alert>
-          ) : !doc ? (
-            <Spinner />
-          ) : doc.mime === "application/pdf" ? (
-            <iframe src={doc.url} title={title} className="h-[75vh] w-full rounded bg-white" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- blob URL of the uploaded copy
-            <img src={doc.url} alt={title} className="max-h-[75vh] max-w-full rounded object-contain" />
-          )}
-        </div>
-      </div>
     </div>
   );
 }

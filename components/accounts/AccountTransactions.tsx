@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton as SkeletonBlock } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
@@ -277,12 +278,12 @@ function Skeleton({ as }: { as: "li" | "tr" }) {
   return Array.from({ length: 4 }, (_, i) =>
     as === "li" ? (
       <li key={i} className="p-4">
-        <div className="h-10 animate-pulse rounded bg-slate-100" />
+        <SkeletonBlock className="h-10 rounded" />
       </li>
     ) : (
       <tr key={i}>
         <td colSpan={8} className="px-4 py-4">
-          <div className="h-5 animate-pulse rounded bg-slate-100" />
+          <SkeletonBlock className="h-5 rounded" />
         </td>
       </tr>
     ),

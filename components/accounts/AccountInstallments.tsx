@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonRegion, TableSkeleton } from "@/components/ui/Skeleton";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
@@ -46,7 +47,7 @@ export function AccountInstallments({ accountNo, totalInterest }: { accountNo: s
           <Alert tone="error">{error}</Alert>
         </div>
       ) : !data ? (
-        <div className="m-5 h-24 animate-pulse rounded-lg bg-slate-100 sm:m-6" />
+        <SkeletonRegion label="Loading account statement…" className="p-5 sm:p-6"><TableSkeleton rows={4} columns={5} /></SkeletonRegion>
       ) : (
         <>
           <dl className="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 sm:grid-cols-5">

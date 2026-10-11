@@ -9,7 +9,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-5">
       <WelcomeBanner />
-      <DashboardOverview />
+      <DashboardOverview showCalculator />
       <QuickActions actions={[
         { label: "Open New Account", href: "/admin/open-account", icon: "plusCircle" },
         { label: "Make Withdrawal", href: "/admin/withdrawals", icon: "upload" },

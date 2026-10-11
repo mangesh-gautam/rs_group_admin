@@ -2,16 +2,23 @@
 
 import type { AccountType } from "@/lib/deposits/types";
 
-/** One closed month: previous balance → deposits − withdrawals → interest → closing balance. */
+/**
+ * One closed month. PRINCIPAL rows (simple interest): previous principal +
+ * deposits − principal withdrawn = month-end principal; interest on it;
+ * accrued interest = all interest held; closing = principal + accrued interest.
+ * BALANCE rows: months closed before migration 022 (interest on the whole balance).
+ */
 export type MonthlyInterest = {
   month: string; // YYYY-MM-01
   previousBalance: string;
   deposits: string;
   withdrawals: string;
-  interestBase: string; // month-end balance the interest is calculated on
+  interestBase: string; // month-end principal the interest is calculated on
   rate: string; // % per month
   interest: string;
+  accruedInterest: string | null; // interest held after this month (null for BALANCE rows)
   closingBalance: string;
+  interestBasis: "PRINCIPAL" | "BALANCE";
   receiptNo: string | null; // DEP… of the interest credit (none when 0)
   postedAt: string;
 };
@@ -24,13 +31,17 @@ export type AccountInterest = {
   interestRate: string;
   interestFrom: string; // first month settled at month end
   balance: string;
+  principal: string; // earns the interest
+  accruedInterest: string; // credited, not withdrawn
   totalInterest: string;
   currentMonth: {
     month: string;
     deposits: string;
     withdrawals: string;
     balance: string;
-    estimatedInterest: string; // if nothing else changes this month
+    principal: string;
+    accruedInterest: string;
+    estimatedInterest: string; // on the principal, if nothing else changes this month
   };
   months: MonthlyInterest[]; // newest first
 };

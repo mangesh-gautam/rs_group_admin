@@ -1,6 +1,8 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
+import { KycStatusBadge } from "@/components/kyc/KycStatusBadge";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
@@ -180,6 +182,7 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
                       <td className="px-4 py-3">
                         <p className="font-medium text-navy">{a.name}</p>
                         {a.fatherHusbandName && <p className="text-xs text-slate-500">C/o {a.fatherHusbandName}</p>}
+                        {a.kycStatus && a.kycStatus !== "VERIFIED" && <KycStatusBadge status={a.kycStatus} className="mt-1" />}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{a.mobileNumber}</td>
                       <td className="px-4 py-3 text-slate-700">{a.city}</td>
@@ -260,12 +263,12 @@ function SkeletonItems({ as, cols = 1 }: { as: "li" | "tr"; cols?: number }) {
   return Array.from({ length: 4 }, (_, i) =>
     as === "li" ? (
       <li key={i} className="p-4">
-        <div className="h-12 animate-pulse rounded bg-slate-100" />
+        <Skeleton className="h-12 rounded" />
       </li>
     ) : (
       <tr key={i}>
         <td colSpan={cols} className="px-4 py-4">
-          <div className="h-5 animate-pulse rounded bg-slate-100" />
+          <Skeleton className="h-5 rounded" />
         </td>
       </tr>
     ),

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/auth/FormControls";
@@ -122,7 +123,7 @@ export function ActiveSessions() {
               {!sessions &&
                 Array.from({ length: 2 }, (_, i) => (
                   <li key={i} className="p-4">
-                    <div className="h-12 animate-pulse rounded bg-slate-100" />
+                    <Skeleton className="h-12 rounded" />
                   </li>
                 ))}
               {sessions?.map((s) => (
@@ -174,7 +175,7 @@ export function ActiveSessions() {
                     Array.from({ length: 2 }, (_, i) => (
                       <tr key={i}>
                         <td colSpan={6} className="px-4 py-4">
-                          <div className="h-5 animate-pulse rounded bg-slate-100" />
+                          <Skeleton className="h-5 rounded" />
                         </td>
                       </tr>
                     ))}

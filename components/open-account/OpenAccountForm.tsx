@@ -17,7 +17,8 @@ import { ACCOUNT_TYPES } from "@/lib/deposits/types";
  */
 
 type FormValues = {
-  name: string;
+  name: string; // first name(s); the full name is name + lastName
+  lastName: string;
   fatherHusbandName: string;
   houseNo: string;
   address: string;
@@ -59,6 +60,7 @@ type Created = {
 
 const EMPTY: FormValues = {
   name: "",
+  lastName: "",
   fatherHusbandName: "",
   houseNo: "",
   address: "",
@@ -135,6 +137,7 @@ const checkFile = (file: File, types: string[], maxMb: number) =>
 function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
   const e: Errors = {};
   if (!v.name.trim()) e.name = "Name is required";
+  if (v.lastName.length > 80) e.lastName = "At most 80 characters";
   if (!v.houseNo.trim()) e.houseNo = "Flat No. / Makan No. is required";
   if (!v.address.trim()) e.address = "Address is required";
   if (!v.city.trim()) e.city = "City is required";
@@ -148,8 +151,13 @@ function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
     e.alternateMobileNumber = "Must be different from Mob.";
   }
   if (!v.sex) e.sex = "Select sex";
-  if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(v.panNo)) e.panNo = "Enter a valid PAN (e.g. ABCDE1234F)";
-  if (!/^[2-9]\d{11}$/.test(v.aadhaarNo)) e.aadhaarNo = "Enter a valid 12-digit Aadhaar number";
+  // PAN / Aadhaar are optional (KYC can be completed later), each number with its copy.
+  if (v.panNo && !/^[A-Z]{5}\d{4}[A-Z]$/.test(v.panNo)) e.panNo = "Enter a valid PAN (e.g. ABCDE1234F)";
+  if (v.aadhaarNo && !/^[2-9]\d{11}$/.test(v.aadhaarNo)) e.aadhaarNo = "Enter a valid 12-digit Aadhaar number";
+  if (v.panNo && !files.panCard) e.panCard = "Upload the PAN card copy";
+  if (!v.panNo && files.panCard) e.panNo = "Enter the PAN of this copy";
+  if (v.aadhaarNo && !files.aadhaarCard) e.aadhaarCard = "Upload the Aadhaar card copy";
+  if (!v.aadhaarNo && files.aadhaarCard) e.aadhaarNo = "Enter the Aadhaar number of this copy";
   if (v.bankAccountNo && !/^\d{9,18}$/.test(v.bankAccountNo)) e.bankAccountNo = "A/c No. must be 9–18 digits";
   if (v.ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.ifscCode)) e.ifscCode = "Enter a valid IFSC (e.g. SBIN0001234)";
   if (!/^\d{1,10}(\.\d{1,2})?$/.test(v.amount) || Number(v.amount) <= 0) e.amount = "Enter an amount greater than 0";
@@ -160,7 +168,6 @@ function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
   if (v.nomineeAge && !(Number(v.nomineeAge) >= 0 && Number(v.nomineeAge) <= 120)) e.nomineeAge = "0–120";
   if (v.sponsorMobile && !/^[6-9]\d{9}$/.test(v.sponsorMobile)) e.sponsorMobile = "Enter a valid 10-digit mobile number";
   if (!files.photo) e.photo = "Photograph is required";
-  for (const doc of DOCUMENTS) if (!files[doc.key]) e[doc.key] = "Required";
   return e;
 }
 
@@ -214,7 +221,7 @@ export function OpenAccountForm() {
     setSubmitting(true);
     try {
       const [photo, panCard, aadhaarCard] = await Promise.all(
-        (["photo", "panCard", "aadhaarCard"] as const).map((k) => readAsDataUrl(files[k]!)),
+        (["photo", "panCard", "aadhaarCard"] as const).map((k) => (files[k] ? readAsDataUrl(files[k]) : undefined)),
       );
       const result = await authFetch<Created>("/api/customers/account-holders", {
         method: "POST",
@@ -300,7 +307,8 @@ export function OpenAccountForm() {
 
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_150px]">
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-          {text("name", "Name", { required: true, placeholder: "Full name", autoComplete: "off" })}
+          {text("name", "Name", { required: true, placeholder: "First (and middle) name", autoComplete: "off" })}
+          {text("lastName", "Last Name", { placeholder: "Last name", autoComplete: "off", clean: (v) => v.slice(0, 80) })}
           {text("fatherHusbandName", "Father's / Husband's Name", { placeholder: "Father's or husband's name" })}
           {text("dob", "DOB", { required: true, type: "date", max: new Date().toISOString().slice(0, 10) })}
           <Field label="Sex" required error={errors.sex}>
@@ -318,8 +326,8 @@ export function OpenAccountForm() {
           {text("mobileNumber", "Mob.", { required: true, inputMode: "numeric", placeholder: "10-digit mobile", clean: digits(10) })}
           {text("alternateMobileNumber", "Alternate Mob.", { inputMode: "numeric", placeholder: "Optional", clean: digits(10) })}
           {text("email", "E-mail", { type: "email", placeholder: "name@example.com" })}
-          {text("panNo", "PAN No.", { required: true, placeholder: "ABCDE1234F", clean: upper(10), className: "font-mono" })}
-          {text("aadhaarNo", "Aadhaar No.", { required: true, inputMode: "numeric", placeholder: "12-digit Aadhaar", clean: digits(12) })}
+          {text("panNo", "PAN No.", { placeholder: "Optional · ABCDE1234F", clean: upper(10), className: "font-mono" })}
+          {text("aadhaarNo", "Aadhaar No.", { inputMode: "numeric", placeholder: "Optional · 12-digit Aadhaar", clean: digits(12) })}
         </div>
 
         {/* Photograph */}
@@ -482,7 +490,10 @@ export function OpenAccountForm() {
           <Icon name="fileText" className="mt-0.5 size-5 shrink-0 text-brand" />
           <div>
             <p className="text-sm font-semibold text-navy">Documents</p>
-            <p className="text-xs text-slate-600">Self-attested copies, as listed on the registration form</p>
+            <p className="text-xs text-slate-600">
+              Self-attested copies. PAN and Aadhaar are optional now — without both, KYC stays pending:
+              the account can deposit but cannot withdraw until the documents are uploaded on the KYC page.
+            </p>
           </div>
         </div>
         <div className="grid min-w-0 gap-3 lg:grid-cols-2">
@@ -501,7 +512,7 @@ export function OpenAccountForm() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-navy">
-                    {doc.label}<span className="text-red-500"> *</span>
+                    {doc.label}<span className="font-normal text-slate-500"> (Optional)</span>
                   </span>
                   <span className={`block break-words text-xs ${err ? "text-red-500" : file ? "text-emerald-700" : "text-slate-500"}`}>
                     {err ?? file?.name ?? doc.hint}

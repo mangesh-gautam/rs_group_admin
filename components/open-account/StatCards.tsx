@@ -10,6 +10,14 @@ export type Stat = {
   link?: { label: string; href: string };
 };
 
+/** Soft glow colour of each tone for the entrance animation (globals.css .stat-pop). */
+const GLOW: Record<Stat["tone"], string> = {
+  green: "rgba(16, 185, 129, 0.22)",
+  blue: "rgba(59, 130, 246, 0.22)",
+  orange: "rgba(251, 146, 60, 0.26)",
+  purple: "rgba(139, 92, 246, 0.22)",
+};
+
 const TONES: Record<
   Stat["tone"],
   { card: string; badge: string; label: string; value: string; accent: string }
@@ -44,15 +52,17 @@ const TONES: Record<
   },
 };
 
-export function StatCards({ stats }: { stats: Stat[] }) {
+/** `animated`: each card scales in softly with a glow from its centre, one after another. */
+export function StatCards({ stats, animated = false }: { stats: Stat[]; animated?: boolean }) {
   return (
     <div className={`grid grid-cols-2 gap-3 ${stats.length === 6 ? "md:grid-cols-3" : "md:grid-cols-4"}`}>
-      {stats.map((s) => {
+      {stats.map((s, i) => {
         const t = TONES[s.tone];
         return (
           <div
             key={s.label}
-            className={`rounded-xl border bg-gradient-to-b to-white p-3.5 ${t.card}`}
+            className={`rounded-xl border bg-gradient-to-b to-white p-3.5 ${t.card} ${animated ? "stat-pop" : ""}`}
+            style={animated ? ({ "--glow": GLOW[s.tone], animationDelay: `${i * 60}ms` } as React.CSSProperties) : undefined}
           >
             <span
               className={`grid size-8 place-items-center rounded-full text-white ${t.badge}`}

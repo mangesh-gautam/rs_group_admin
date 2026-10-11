@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonRegion, TableSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
@@ -68,7 +69,7 @@ export function AccountWithdrawalCycle({ accountNo }: { accountNo: string }) {
           <Alert tone="error">{error}</Alert>
         </div>
       ) : !data ? (
-        <div className="m-5 h-32 animate-pulse rounded-lg bg-slate-100 sm:m-6" />
+        <SkeletonRegion label="Loading account statement…" className="p-5 sm:p-6"><TableSkeleton rows={4} columns={5} /></SkeletonRegion>
       ) : !c ? (
         <p className="p-5 text-sm text-slate-500 sm:p-6">No successful deposit yet — the cycle starts with the first deposit.</p>
       ) : (

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion, CardsSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Spinner } from "@/components/auth/FormControls";
@@ -204,6 +205,8 @@ function DepositDesk({
         </div>
         {errors.accountNo && <p className="mt-1 text-xs text-red-500">{errors.accountNo}</p>}
       </form>
+
+      {finding && <SkeletonRegion label="Looking up account…"><CardsSkeleton count={1} /></SkeletonRegion>}
 
       {account && (
         <div className="flex gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -439,7 +442,7 @@ function DepositHistory({ version, accountNo }: { version: number; accountNo: st
                 Array.from({ length: 4 }, (_, i) => (
                   <tr key={i}>
                     <td colSpan={4} className="px-4 py-4">
-                      <div className="h-5 animate-pulse rounded bg-slate-100" />
+                      <Skeleton className="h-5 rounded" />
                     </td>
                   </tr>
                 ))}

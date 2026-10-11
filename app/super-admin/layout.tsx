@@ -13,6 +13,7 @@ import {
 const SUPER_ADMIN_NAV: SuperAdminNavItem[] = [
   { label: "Dashboard", href: "/super-admin/dashboard", icon: "home" },
   { label: "All Accounts", href: "/super-admin/accounts", icon: "users" },
+  { label: "KYC Verification", href: "/super-admin/kyc", icon: "shieldCheck" },
   { label: "Admin Management", href: "/super-admin/admin-management", icon: "users" },
   { label: "Active Sessions", href: "/super-admin/active-sessions", icon: "zap" },
   { label: "Offices", href: "/super-admin/offices", icon: "house" },

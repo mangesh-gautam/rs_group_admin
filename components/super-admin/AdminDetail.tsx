@@ -1,5 +1,6 @@
 "use client";
 
+import { DetailSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
@@ -88,14 +89,7 @@ export function AdminDetail({ id }: { id: string }) {
     );
   }
 
-  if (!admin) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-4">
-        <div className="h-10 w-72 animate-pulse rounded bg-white" />
-        <div className="h-64 animate-pulse rounded-2xl bg-white" />
-      </div>
-    );
-  }
+  if (!admin) return <div className="mx-auto max-w-5xl"><DetailSkeleton /></div>;
 
   const details: [string, string][] = [
     ["Username", admin.username],

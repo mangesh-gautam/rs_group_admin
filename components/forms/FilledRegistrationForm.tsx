@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PrintButton } from "@/app/forms/account-holder-registration/PrintButton";
@@ -25,7 +26,7 @@ const toFormData = (a: AccountDetail): RegistrationFormData => ({
   sex: SEX_LABEL[a.sex],
   mobile: a.mobileNumber,
   alternateMobile: a.alternateMobileNumber,
-  panNo: a.panNo,
+  panNo: a.panNo ?? "",
   aadhaarNo: formatAadhaar(a.aadhaarNo),
   bankName: a.bankName,
   bankAccountNo: a.bankAccountNo,
@@ -126,7 +127,7 @@ export function FilledRegistrationForm({
           </Alert>
         </div>
       ) : !account ? (
-        <div className="mx-auto h-[297mm] w-[210mm] max-w-full animate-pulse bg-white/70" />
+        <DocumentSkeleton />
       ) : (
         <div className="overflow-x-auto print:overflow-visible">
           <RegistrationFormSheet data={toFormData(account)} />

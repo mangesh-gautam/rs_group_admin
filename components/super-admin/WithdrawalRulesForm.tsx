@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonRegion, FormSkeleton } from "@/components/ui/Skeleton";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Field, Spinner, inputCls } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
@@ -58,7 +59,7 @@ export function WithdrawalRulesForm() {
   }, [authFetch]);
 
   if (loadError) return <Alert tone="error">{loadError}</Alert>;
-  if (!rules || !values) return <div className="h-96 animate-pulse rounded-2xl bg-white" />;
+  if (!rules || !values) return <SkeletonRegion label="Loading withdrawal rules…"><FormSkeleton fields={5} /></SkeletonRegion>;
 
   const set = <K extends keyof Values>(field: K, value: Values[K]) => {
     setValues((v) => v && { ...v, [field]: value });

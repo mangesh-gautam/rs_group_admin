@@ -1,5 +1,6 @@
 "use client";
 
+import { ScreenSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -48,11 +49,9 @@ export function RequireAuth({ children, roles, allowPendingPasswordChange = fals
 
 export function FullPageLoader({ label = "Checking your session…" }: { label?: string }) {
   return (
-    <div className="grid min-h-screen place-items-center bg-background" role="status" aria-live="polite">
-      <div className="flex flex-col items-center gap-3 text-sm text-slate-500">
-        <span className="size-9 animate-spin rounded-full border-3 border-brand-soft border-t-brand" />
-        {label}
-      </div>
+    <div className="relative">
+      <span role="status" className="sr-only">{label}</span>
+      <ScreenSkeleton kind="auth" />
     </div>
   );
 }

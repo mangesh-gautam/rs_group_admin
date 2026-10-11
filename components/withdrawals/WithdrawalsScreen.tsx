@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion, CardsSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Spinner } from "@/components/auth/FormControls";
@@ -248,6 +249,8 @@ function WithdrawalDesk({
         {errors.accountNo && <p className="mt-1 text-xs text-red-500">{errors.accountNo}</p>}
       </form>
 
+      {finding && <SkeletonRegion label="Looking up account…"><CardsSkeleton count={1} /></SkeletonRegion>}
+
       {account && (
         <div className="flex gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
           {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the API */}
@@ -284,7 +287,22 @@ function WithdrawalDesk({
 
       {account && terms && <CycleStatus account={account} />}
 
-      {account && terms && !terms.allowed && account.cycle && (
+      {account && account.kyc && !account.kyc.verified && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="flex items-start gap-2">
+            <Icon name="lock" className="mt-0.5 size-4 shrink-0" />
+            <span>
+              <b>{account.kyc.status === "SUBMITTED" ? "KYC documents are waiting for approval." : "KYC is pending."}</b>{" "}
+              Withdrawals are blocked until PAN and Aadhaar are verified. Deposits are still allowed.
+            </span>
+          </p>
+          <Link href={`/admin/accounts/${account.accountNo}`} className="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3.5 text-xs font-medium text-white hover:bg-brand-dark">
+            <Icon name="shieldCheck" className="size-4" /> {account.kyc.status === "SUBMITTED" ? "Review KYC" : "Complete KYC"}
+          </Link>
+        </div>
+      )}
+
+      {account && terms && !terms.allowed && account.cycle && (account.kyc?.verified ?? true) && (
         <PenaltyDesk
           account={account}
           onPaid={() =>
@@ -725,7 +743,7 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                 Array.from({ length: 4 }, (_, i) => (
                   <tr key={i}>
                     <td colSpan={5} className="px-4 py-4">
-                      <div className="h-5 animate-pulse rounded bg-slate-100" />
+                      <Skeleton className="h-5 rounded" />
                     </td>
                   </tr>
                 ))}

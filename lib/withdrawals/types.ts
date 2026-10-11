@@ -70,13 +70,14 @@ export type WithdrawalAccount = {
   withdrawalToday: {
     type: WithdrawalType;
     penaltyRate: string; // "0.00" | "20.00" (% of the amount)
-    allowed: boolean; // false while a missed-month penalty is outstanding
+    allowed: boolean; // false while KYC is not verified or a missed-month penalty is outstanding
     reasons: string[];
     eligibleFrom: string | null;
     daysUntilNormal: number;
   };
   cycle: DepositCycle | null; // null: no successful deposit yet
   rules: WithdrawalRules;
+  kyc: { status: "PENDING" | "SUBMITTED" | "VERIFIED" | "REJECTED"; verified: boolean }; // only VERIFIED can withdraw
 };
 
 /** GET /api/withdrawals/accounts/:accountNo/cycle — the same without the photo. */

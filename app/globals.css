@@ -22,3 +22,61 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* ---- dashboard stat cards: soft scale-in + a glow that spreads from the centre ---- */
+@keyframes stat-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes stat-glow {
+  0%   { opacity: 0;   transform: scale(0.2); }
+  40%  { opacity: 1; }
+  100% { opacity: 0;   transform: scale(1.6); }
+}
+.stat-pop {
+  position: relative;
+  isolation: isolate;            /* the glow sits above the card background, below its content */
+  overflow: hidden;
+  animation: stat-in 420ms ease-out both;
+  transition: box-shadow 200ms ease;
+}
+.stat-pop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at center, var(--glow, rgba(11, 94, 215, 0.18)) 0%, transparent 65%);
+  opacity: 0;
+  animation: stat-glow 1100ms ease-out both;
+  animation-delay: inherit;
+}
+.stat-pop:hover { box-shadow: 0 6px 18px -10px var(--glow, rgba(11, 94, 215, 0.3)); }
+
+/* calculator panel fades in after the cards */
+@keyframes calc-pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.calc-pop { animation: calc-pop 400ms ease-out 350ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-pop, .stat-pop::before, .calc-pop { animation: none; }
+}
+
+/* Shared loading placeholders; no animation for users who prefer less motion. */
+.skeleton {
+  background: linear-gradient(100deg, #e8edf4 20%, #f5f7fb 40%, #e8edf4 60%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .animate-pulse { animation: none; }
+}
+@media print {
+  .skeleton { animation: none; background: #e8edf4; }
+}

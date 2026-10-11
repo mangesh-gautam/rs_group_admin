@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion, TableSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { Alert } from "@/components/auth/FormControls";
 import { Icon, type IconName } from "@/components/icons";
@@ -85,7 +86,7 @@ export function SuperAdminDashboard() {
               <p className="mt-3 text-xs font-medium text-slate-600">{s.label}</p>
               <p className="mt-0.5 text-2xl font-bold text-navy">
                 {s.value === null || (loading && !admins) ? (
-                  <span className="inline-block h-7 w-10 animate-pulse rounded bg-slate-100" />
+                  <Skeleton className="inline-block h-7 w-10 rounded" />
                 ) : (
                   s.value
                 )}
@@ -113,7 +114,7 @@ export function SuperAdminDashboard() {
         })}
       </div>
 
-      <DashboardOverview />
+      <DashboardOverview showCalculator />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -129,7 +130,7 @@ export function SuperAdminDashboard() {
             <Icon name="arrowRight" className="size-4" />
           </Link>
         </div>
-        {!loading && list.length === 0 && !error ? (
+        {loading && !admins ? <SkeletonRegion label="Loading recent admins…"><TableSkeleton rows={5} columns={3} /></SkeletonRegion> : !loading && list.length === 0 && !error ? (
           <p className="py-8 text-center text-sm text-slate-500">
             No admins yet.{" "}
             <Link href="/super-admin/admin-management/create" className="font-medium text-brand hover:underline">

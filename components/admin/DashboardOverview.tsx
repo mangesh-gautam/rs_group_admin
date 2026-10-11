@@ -1,8 +1,10 @@
 "use client";
 
+import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
+import { InterestCalculator } from "@/components/admin/InterestCalculator";
 import { RecentAccounts } from "@/components/open-account/RecentAccounts";
 import { StatCards, type Stat } from "@/components/open-account/StatCards";
 import { errorMessage } from "@/lib/auth/api";
@@ -14,8 +16,11 @@ const money = (value: string) => new Intl.NumberFormat("en-IN", {
   style: "currency", currency: "INR", maximumFractionDigits: 2,
 }).format(Number(value));
 
-/** Shared financial overview for the dashboard and registration sidebar. */
-export function DashboardOverview() {
+/**
+ * Shared financial overview for the dashboard and registration sidebar.
+ * `showCalculator` adds the monthly deposit calculator below the stat cards (dashboards only).
+ */
+export function DashboardOverview({ showCalculator = false }: { showCalculator?: boolean }) {
   const { authFetch, user } = useAuth();
   const [version, setVersion] = useState(0);
   const key = `${user?.id ?? ""}|${version}`;
@@ -56,10 +61,11 @@ export function DashboardOverview() {
           <Icon name="refresh" className="size-4" /> Refresh
         </button>
       </div>
-      {loading && <p role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">Loading account overview…</p>}
+      {loading && <DashboardSkeleton calculator={showCalculator} />}
       {!loading && result.error && <Alert tone="error">{result.error} Use Refresh to try again.</Alert>}
       {data && <>
-        <StatCards stats={stats} />
+        <StatCards stats={stats} animated />
+        {showCalculator && <InterestCalculator />}
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
           <h3 className="font-semibold text-navy">This Month · {new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${data.month}-01T00:00:00+05:30`))}</h3>
           <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">

@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonRegion, TableSkeleton } from "@/components/ui/Skeleton";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
@@ -9,10 +10,12 @@ import { money } from "@/lib/deposits/types";
 import { monthLabel, type AccountInterest } from "@/lib/interest/types";
 
 /**
- * Account page → month-end interest statement (interest-service). Every
- * calendar month: previous balance + deposits − withdrawals = month-end
- * balance, interest on it at the account's rate, closing balance. The running
- * month is shown on top with the interest it would earn so far.
+ * Account page → month-end interest statement (interest-service). Simple
+ * interest: every calendar month the month-end principal earns the account's
+ * rate; credited interest is kept apart and never earns interest. Columns:
+ * principal, deposits, withdrawals, interest of the month, total interest
+ * held, total (principal + interest). The running month is shown on top with
+ * the interest it would earn so far.
  */
 export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
   const { authFetch } = useAuth();
@@ -37,7 +40,7 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
         </h2>
         {data && (
           <p className="text-xs text-slate-500">
-            {data.interestRate}% per month on the month-end balance · credited on the 1st · total{" "}
+            {data.interestRate}% per month on the principal only · credited on the 1st · total{" "}
             <b className="text-emerald-700">{money(data.totalInterest)}</b>
           </p>
         )}
@@ -48,18 +51,19 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
           <Alert tone="error">{error}</Alert>
         </div>
       ) : !data ? (
-        <div className="m-5 h-24 animate-pulse rounded-lg bg-slate-100 sm:m-6" />
+        <SkeletonRegion label="Loading account statement…" className="p-5 sm:p-6"><TableSkeleton rows={4} columns={5} /></SkeletonRegion>
       ) : (
         <div className="max-h-[28rem] overflow-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="sticky top-0 bg-slate-50 text-xs text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Month</th>
-                <th className="px-4 py-3 text-right font-medium">Previous Balance</th>
                 <th className="px-4 py-3 text-right font-medium">Deposits</th>
                 <th className="px-4 py-3 text-right font-medium">Withdrawals</th>
-                <th className="px-4 py-3 text-right font-medium">Interest</th>
-                <th className="px-4 py-3 text-right font-medium">Closing Balance</th>
+                <th className="px-4 py-3 text-right font-medium">Principal</th>
+                <th className="px-4 py-3 text-right font-medium">Interest (month)</th>
+                <th className="px-4 py-3 text-right font-medium">Interest (total)</th>
+                <th className="px-4 py-3 text-right font-medium">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -68,22 +72,15 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
                   <p className="font-medium text-navy">{monthLabel(data.currentMonth.month)}</p>
                   <p className="text-[11px] text-amber-700">Running · credited at month end</p>
                 </td>
-                <td className="px-4 py-3 text-right text-slate-700">
-                  {money(
-                    String(
-                      Number(data.currentMonth.balance) -
-                        Number(data.currentMonth.deposits) +
-                        Number(data.currentMonth.withdrawals),
-                    ),
-                  )}
-                </td>
                 <td className="px-4 py-3 text-right text-emerald-700">+{money(data.currentMonth.deposits)}</td>
                 <td className="px-4 py-3 text-right text-red-600">
                   {Number(data.currentMonth.withdrawals) > 0 ? `−${money(data.currentMonth.withdrawals)}` : "—"}
                 </td>
+                <td className="px-4 py-3 text-right text-slate-700">{money(data.currentMonth.principal)}</td>
                 <td className="px-4 py-3 text-right text-slate-600" title="If nothing else changes this month">
                   ≈ {money(data.currentMonth.estimatedInterest)}
                 </td>
+                <td className="px-4 py-3 text-right text-slate-700">{money(data.currentMonth.accruedInterest)}</td>
                 <td className="px-4 py-3 text-right font-medium text-navy">{money(data.currentMonth.balance)}</td>
               </tr>
               {data.months.map((m) => (
@@ -91,21 +88,25 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
                   <td className="px-4 py-3">
                     <p className="font-medium text-navy">{monthLabel(m.month)}</p>
                     {m.receiptNo && <p className="font-mono text-[11px] text-slate-400">{m.receiptNo}</p>}
+                    {m.interestBasis === "BALANCE" && (
+                      <p className="text-[11px] text-slate-400">Old rule: interest on the whole balance</p>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-700">{money(m.previousBalance)}</td>
                   <td className="px-4 py-3 text-right text-emerald-700">+{money(m.deposits)}</td>
                   <td className="px-4 py-3 text-right text-red-600">
                     {Number(m.withdrawals) > 0 ? `−${money(m.withdrawals)}` : "—"}
                   </td>
+                  <td className="px-4 py-3 text-right text-slate-700">{money(m.interestBase)}</td>
                   <td className="px-4 py-3 text-right font-semibold text-emerald-700" title={`${m.rate}% of ${money(m.interestBase)}`}>
                     +{money(m.interest)}
                   </td>
+                  <td className="px-4 py-3 text-right text-slate-700">{m.accruedInterest ? money(m.accruedInterest) : "—"}</td>
                   <td className="px-4 py-3 text-right font-semibold text-navy">{money(m.closingBalance)}</td>
                 </tr>
               ))}
               {data.months.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-xs text-slate-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-xs text-slate-500">
                     No month closed yet — the first interest is credited on the 1st of next month.
                   </td>
                 </tr>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useState, type FormEvent } from "react";
 import { Alert, Field, Spinner, inputCls } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
@@ -94,7 +95,7 @@ export function OfficeManagement() {
                     Array.from({ length: 2 }, (_, i) => (
                       <tr key={i}>
                         <td colSpan={5} className="px-4 py-4">
-                          <div className="h-5 animate-pulse rounded bg-slate-100" />
+                          <Skeleton className="h-5 rounded" />
                         </td>
                       </tr>
                     ))}
