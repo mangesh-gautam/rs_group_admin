@@ -18,7 +18,7 @@ export function AdminHeader({ notificationCount }: { notificationCount: number }
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-6 sm:px-4 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:gap-6 sm:px-4 lg:px-6">
       <MobileNavButton />
       <div className="min-w-0 flex-1 md:flex-none lg:w-56">
         <Logo href="/admin/dashboard" hideWordmarkOnTiny />

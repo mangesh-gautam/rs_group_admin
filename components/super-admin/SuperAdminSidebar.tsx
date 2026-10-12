@@ -17,7 +17,7 @@ type Props = {
 export function SuperAdminSidebar(props: Props) {
   return (
     <>
-      <aside className="hidden w-64 shrink-0 flex-col bg-navy py-6 text-slate-200 lg:flex">
+      <aside className="hidden min-h-0 w-64 shrink-0 flex-col overflow-y-auto overscroll-contain bg-navy py-6 text-slate-200 lg:flex">
         <SidebarContent {...props} />
       </aside>
       <MobileDrawer>

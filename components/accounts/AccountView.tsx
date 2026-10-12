@@ -21,6 +21,7 @@ import { formatDateTime, officeLabel } from "@/lib/auth/types";
 import { AccountInstallments } from "./AccountInstallments";
 import { AccountMonthlyInterest } from "./AccountMonthlyInterest";
 import { AccountTransactions } from "./AccountTransactions";
+import { AccountReferral } from "./AccountReferral";
 import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
 import { DocumentViewer } from "./DocumentViewer";
 import { KycDialog } from "@/components/kyc/KycDialog";
@@ -239,6 +240,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
           <Item label="Office" value={`${officeLabel(a.office)} (${a.office.pincode})`} wide />
         </Section>
       </div>
+
+      <AccountReferral accountNo={a.accountNo} />
 
       <AccountWithdrawalCycle accountNo={a.accountNo} />
 

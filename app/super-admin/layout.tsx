@@ -18,6 +18,9 @@ const SUPER_ADMIN_NAV: SuperAdminNavItem[] = [
   { label: "Active Sessions", href: "/super-admin/active-sessions", icon: "zap" },
   { label: "Offices", href: "/super-admin/offices", icon: "house" },
   { label: "Withdrawal Rules", href: "/super-admin/withdrawal-rules", icon: "calendar" },
+  { label: "Referral Commission", href: "/super-admin/referral-commission", icon: "handCoins" },
+  { label: "Advisors", href: "/super-admin/advisors", icon: "handCoins" },
+  { label: "Referral Tree", href: "/super-admin/referral-tree", icon: "users" },
   { label: "Create Admin", href: "/super-admin/admin-management/create", icon: "userPlus" },
   { label: "Settings", href: "/super-admin/settings", icon: "settings" },
 ];
@@ -32,11 +35,11 @@ export default function SuperAdminLayout({ children }: LayoutProps<"/super-admin
   return (
     <RequireAuth roles={["SUPER_ADMIN"]}>
       <MobileNavProvider>
-        <div className="flex min-h-screen flex-col">
+        <div className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
           <SuperAdminHeader />
-          <div className="flex flex-1">
+          <div className="flex min-h-0 flex-1 overflow-hidden print:overflow-visible">
             <SuperAdminSidebar items={SUPER_ADMIN_NAV} notice={SIDEBAR_NOTICE} />
-            <main className="min-w-0 flex-1 bg-gradient-to-br from-[#f4f7fc] to-[#eef3fb] p-3 sm:p-4 lg:p-8">
+            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain print:overflow-visible bg-gradient-to-br from-[#f4f7fc] to-[#eef3fb] p-3 sm:p-4 lg:p-8">
               {children}
             </main>
           </div>

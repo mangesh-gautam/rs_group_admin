@@ -65,6 +65,7 @@ export type DepositReceipt = {
   balance: string; // balance after this deposit
   depositedAt: string;
   createdBy: string;
+  commission?: { levels: number; total: string }; // referral commission paid to the depositor's upline
 };
 
 /** Row of GET /api/deposits */

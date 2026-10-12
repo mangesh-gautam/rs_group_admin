@@ -20,6 +20,8 @@ const MOCK_NAV_SECTIONS: NavSection[] = [
       { label: "Open New Account", href: "/admin/open-account", icon: "plusCircle" },
       { label: "All Accounts", href: "/admin/accounts", icon: "users" },
       { label: "KYC Verification", href: "/admin/kyc", icon: "shieldCheck" },
+      { label: "Advisors", href: "/admin/advisors", icon: "handCoins" },
+      { label: "Referral Tree", href: "/admin/referral-tree", icon: "users" },
       { label: "Account Approvals", href: "/admin/approvals", icon: "checkCircle" },
     ],
   },
@@ -55,11 +57,11 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
     // ADMIN area. The Super Admin may also open it (header → Admin Panel).
     <RequireAuth roles={["ADMIN", "SUPER_ADMIN"]}>
       <MobileNavProvider>
-        <div className="flex min-h-screen flex-col">
+        <div className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
           <AdminHeader notificationCount={MOCK_NOTIFICATION_COUNT} />
-          <div className="flex flex-1">
+          <div className="flex min-h-0 flex-1 overflow-hidden print:overflow-visible">
             <AdminSidebar sections={MOCK_NAV_SECTIONS} />
-            <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">{children}</main>
+            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain print:overflow-visible p-3 sm:p-4 lg:p-6">{children}</main>
           </div>
         </div>
       </MobileNavProvider>

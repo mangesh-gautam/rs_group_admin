@@ -19,8 +19,8 @@ export function activeHref(pathname: string, hrefs: string[]) {
 export function AdminSidebar({ sections }: { sections: NavSection[] }) {
   return (
     <>
-      <aside className="hidden w-60 shrink-0 bg-navy px-3 py-4 text-slate-200 lg:block">
-        <div className="sticky top-20">
+      <aside className="hidden min-h-0 w-60 shrink-0 overflow-y-auto overscroll-contain bg-navy px-3 py-4 text-slate-200 lg:block">
+        <div className="min-w-0">
           <NavLinks sections={sections} />
         </div>
       </aside>

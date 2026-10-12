@@ -83,7 +83,7 @@ export function MobileDrawer({ children }: { children: ReactNode }) {
         aria-modal="true"
         aria-label="Navigation menu"
         inert={!open}
-        className={`absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-navy text-slate-200 shadow-2xl transition-transform duration-200 ${
+        className={`absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain bg-navy text-slate-200 shadow-2xl transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

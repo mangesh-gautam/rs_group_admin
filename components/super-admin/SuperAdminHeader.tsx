@@ -7,7 +7,7 @@ import { UserMenu } from "@/components/shell/UserMenu";
 
 export function SuperAdminHeader() {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:h-[72px] sm:px-4 lg:px-9">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:h-[72px] sm:px-4 lg:px-9">
       <MobileNavButton />
       <div className="min-w-0 flex-1">
         <Logo href="/super-admin/dashboard" hideWordmarkOnTiny />

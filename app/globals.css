@@ -80,3 +80,15 @@ body {
 @media print {
   .skeleton { animation: none; background: #e8edf4; }
 }
+
+/* Animate only the member row, leaving tree spacing and connectors in place. */
+@keyframes referral-node-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { transform: translateY(0); }
+}
+.referral-node-enter {
+  animation: referral-node-enter 320ms ease-out backwards;
+}
+@media (prefers-reduced-motion: reduce), print {
+  .referral-node-enter { animation: none; }
+}

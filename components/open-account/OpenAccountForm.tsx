@@ -1,5 +1,6 @@
 "use client";
 
+import { SponsorPicker } from "./SponsorPicker";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icons";
@@ -43,13 +44,12 @@ type FormValues = {
   nomineeName: string;
   nomineeAge: string;
   nomineeRelation: string;
-  sponsorName: string;
-  sponsorMobile: string;
-  sponsorId: string;
+  sponsorAccountNo: string; // an existing account; name / mobile come from it
 };
 
 type DocKey = "photo" | "panCard" | "aadhaarCard";
 type Errors = Partial<Record<keyof FormValues | DocKey | "officeId", string>>;
+const INVALID_SPONSOR = "Invalid Sponsor ID. No active account found.";
 
 type Created = {
   accountNo: string; // RS + office PIN + 6-digit counter, e.g. RS110033000001
@@ -85,9 +85,7 @@ const EMPTY: FormValues = {
   nomineeName: "",
   nomineeAge: "",
   nomineeRelation: "",
-  sponsorName: "",
-  sponsorMobile: "",
-  sponsorId: "",
+  sponsorAccountNo: "",
 };
 
 const SEXES = [
@@ -166,7 +164,6 @@ function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
   if (!/^\d{1,2}$/.test(v.bufferDays) || Number(v.bufferDays) > 20) e.bufferDays = "0 to 20 days";
   if (v.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) e.email = "Enter a valid email";
   if (v.nomineeAge && !(Number(v.nomineeAge) >= 0 && Number(v.nomineeAge) <= 120)) e.nomineeAge = "0–120";
-  if (v.sponsorMobile && !/^[6-9]\d{9}$/.test(v.sponsorMobile)) e.sponsorMobile = "Enter a valid 10-digit mobile number";
   if (!files.photo) e.photo = "Photograph is required";
   return e;
 }
@@ -185,6 +182,7 @@ export function OpenAccountForm() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
+  const [sponsorInvalid, setSponsorInvalid] = useState(false);
   // Bumped on reset so file inputs (uncontrolled) are remounted empty.
   const [formKey, setFormKey] = useState(0);
 
@@ -211,6 +209,7 @@ export function OpenAccountForm() {
     e.preventDefault();
     const found = validate(values, files);
     if (isSuperAdmin && !officeId) found.officeId = "Select the office this account is opened at";
+    if (sponsorInvalid) found.sponsorAccountNo = INVALID_SPONSOR;
     setErrors(found);
     setFormError(null);
     if (Object.keys(found).length) {
@@ -478,10 +477,19 @@ export function OpenAccountForm() {
 
       {/* ---------------- Sponsor ---------------- */}
       <SectionTitle icon="handCoins">Sponsor&apos;s Detail</SectionTitle>
-      <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-3">
-        {text("sponsorName", "Sponsor Name", { placeholder: "Sponsor's name" })}
-        {text("sponsorMobile", "Mob.", { inputMode: "numeric", placeholder: "10-digit mobile", clean: digits(10) })}
-        {text("sponsorId", "Sponsor ID", { placeholder: "Sponsor ID", clean: (v) => v.slice(0, 30) })}
+      <p className="mt-1 text-xs text-slate-500">
+        The sponsor must already have an account. When this member deposits, the sponsor and up to 4 sponsors above them earn referral commission.
+      </p>
+      <div className="mt-4">
+        <SponsorPicker
+          value={values.sponsorAccountNo}
+          error={errors.sponsorAccountNo}
+          onChange={(accountNo, invalid) => {
+            setValues((v) => ({ ...v, sponsorAccountNo: accountNo }));
+            setSponsorInvalid(invalid);
+            setErrors((err) => ({ ...err, sponsorAccountNo: undefined }));
+          }}
+        />
       </div>
 
       {/* ---------------- Documents ---------------- */}

@@ -263,6 +263,12 @@ function DepositDesk({
             <ReceiptItem label="Date" value={formatDateTime(receipt.depositedAt)} />
             <ReceiptItem label="Received By" value={receipt.createdBy} />
           </dl>
+          {receipt.commission && receipt.commission.levels > 0 && (
+            <p className="mt-3 border-t border-emerald-200 pt-2 text-xs text-emerald-800">
+              Referral commission: {money(receipt.commission.total)} paid to {receipt.commission.levels} sponsor
+              {receipt.commission.levels === 1 ? "" : "s"} in the upline.
+            </p>
+          )}
         </div>
       )}
 

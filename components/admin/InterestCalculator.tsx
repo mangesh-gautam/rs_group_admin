@@ -11,9 +11,10 @@ const PRESETS = [
   { months: 24, label: "2 years" },
   { months: 36, label: "3 years" },
   { months: 60, label: "5 years" },
+  { months: 120, label: "10 years" },
 ];
 const MIN_MONTHS = 6;
-const MAX_MONTHS = 60;
+const MAX_MONTHS = 120;
 
 type MonthRow = { month: number; principal: number; interest: number; totalInterest: number; total: number };
 
@@ -64,7 +65,7 @@ export function InterestCalculator({ defaultRate = 0.75 }: { defaultRate?: numbe
   );
   const last = rows.at(-1);
   const interestShare = last && last.total > 0 ? (last.totalInterest / last.total) * 100 : 0;
-  const milestones = new Set([6, 12, 24, 36, 48, 60, months]);
+  const milestones = new Set([6, ...Array.from({ length: MAX_MONTHS / 12 }, (_, i) => (i + 1) * 12), months]);
   const tableRows = showAll ? rows : rows.filter((r) => milestones.has(r.month));
 
   return (
