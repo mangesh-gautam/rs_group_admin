@@ -32,6 +32,8 @@ export type OtpChallenge = {
   requiresOtp: true;
   challengeId: string;
   maskedMobile: string;
+  phoneNumber: string;
+  provider: "firebase";
   expiresIn: number;
   resendAvailableIn: number;
 };

@@ -20,6 +20,7 @@ const SUPER_ADMIN_NAV: SuperAdminNavItem[] = [
   { label: "Withdrawal Rules", href: "/super-admin/withdrawal-rules", icon: "calendar" },
   { label: "Referral Commission", href: "/super-admin/referral-commission", icon: "handCoins" },
   { label: "Advisors", href: "/super-admin/advisors", icon: "handCoins" },
+  { label: "Advisor Commission", href: "/super-admin/advisor-commission", icon: "wallet" },
   { label: "Referral Tree", href: "/super-admin/referral-tree", icon: "users" },
   { label: "Create Admin", href: "/super-admin/admin-management/create", icon: "userPlus" },
   { label: "Settings", href: "/super-admin/settings", icon: "settings" },

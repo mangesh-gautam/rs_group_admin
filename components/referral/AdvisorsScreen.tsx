@@ -205,7 +205,8 @@ export function AdvisorsScreen({ initial, basePath, treePath }: { initial: strin
         {/* ---- detail ---- */}
         <div ref={detailRef} className="scroll-mt-4 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:rounded-2xl">
           {selected ? (
-            <AdvisorDetail key={selected} accountNo={selected} name={data?.items.find((a) => a.accountNo === selected)?.name} treePath={treePath} />
+            <AdvisorDetail key={selected} accountNo={selected} name={data?.items.find((a) => a.accountNo === selected)?.name} treePath={treePath}
+              commissionPath={basePath.replace(/advisors$/, "advisor-commission")} />
           ) : (
             <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
               <span>
@@ -220,7 +221,7 @@ export function AdvisorsScreen({ initial, basePath, treePath }: { initial: strin
   );
 }
 
-function AdvisorDetail({ accountNo, name, treePath }: { accountNo: string; name?: string; treePath: string }) {
+function AdvisorDetail({ accountNo, name, treePath, commissionPath }: { accountNo: string; name?: string; treePath: string; commissionPath: string }) {
   const { authFetch } = useAuth();
   const [view, setView] = useState<"list" | "tree">("list");
   const [depth, setDepth] = useState<"1" | "all">("1");
@@ -250,7 +251,10 @@ function AdvisorDetail({ accountNo, name, treePath }: { accountNo: string; name?
               </p>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Link href={`${commissionPath}/${accountNo}`} className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-medium text-navy hover:bg-slate-50">
+              <Icon name="wallet" className="size-4" /> Commission
+            </Link>
             <Link href={`/admin/accounts/${accountNo}`} className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-medium text-navy hover:bg-slate-50">
               <Icon name="user" className="size-4" /> Account
             </Link>

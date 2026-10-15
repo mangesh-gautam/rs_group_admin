@@ -39,8 +39,9 @@ type AuthState = {
 type ChangePasswordResult = { user: AuthUser; revokedSessions: number };
 
 type AuthContextValue = AuthState & {
-  login: (username: string, password: string, location: Coordinates) => Promise<AuthSuccess | OtpChallenge>;
-  verifyOtp: (challengeId: string, otp: string, location: Coordinates) => Promise<AuthUser>;
+  /** A Firebase challenge — or, for an Admin already verified today, a session (applied). */
+  login: (username: string, password: string, location: Coordinates) => Promise<OtpChallenge | AuthSuccess>;
+  verifyOtp: (challengeId: string, firebaseIdToken: string, location: Coordinates) => Promise<AuthUser>;
   resendOtp: (challengeId: string) => Promise<OtpResend>;
   logout: () => Promise<void>;
   changePassword: (input: {
@@ -190,21 +191,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (username: string, password: string, location: Coordinates) => {
-      const result = await apiRequest<AuthSuccess | OtpChallenge>("/api/auth/login", {
+      const result = await apiRequest<OtpChallenge | AuthSuccess>("/api/auth/login", {
         method: "POST",
         body: { username, password, location },
       });
-      if (!result.requiresOtp) applySession(result);
+      // Admin who already completed phone verification today: signed in with the password.
+      if (result.requiresOtp === false && result.accessToken) {
+        applySession(result);
+        return result;
+      }
+      if (result.requiresOtp !== true || result.provider !== "firebase" || !result.challengeId || !result.phoneNumber) {
+        throw new ApiError(503, "PHONE_AUTH_UNAVAILABLE", "Phone verification is not configured. Contact your administrator.");
+      }
       return result;
     },
     [applySession],
   );
 
   const verifyOtp = useCallback(
-    async (challengeId: string, otp: string, location: Coordinates) => {
+    async (challengeId: string, firebaseIdToken: string, location: Coordinates) => {
       const result = await apiRequest<AuthSuccess>("/api/auth/verify-otp", {
         method: "POST",
-        body: { challengeId, otp, location },
+        body: { challengeId, firebaseIdToken, location },
       });
       applySession(result);
       return result.user;

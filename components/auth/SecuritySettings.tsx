@@ -41,7 +41,7 @@ export function SecuritySettings({ breadcrumb }: { breadcrumb: string }) {
             <div>
               <dt className="text-xs text-slate-500">Two-step verification</dt>
               <dd className="text-navy">
-                {user?.role === "ADMIN" ? `OTP to ${user.mobileNumber}` : "Password"}
+                Password + OTP to {user?.mobileNumber ?? "your registered phone"}
               </dd>
             </div>
           </dl>

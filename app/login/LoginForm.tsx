@@ -8,6 +8,7 @@ import { Icon } from "@/components/icons";
 import { Logo } from "@/components/shell/Logo";
 import { ApiError, errorMessage } from "@/lib/auth/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import type { FirebasePhoneLogin } from "@/lib/auth/firebasePhone";
 import { getCurrentLocation } from "@/lib/auth/location";
 import { safeNext, type Coordinates, type OtpChallenge } from "@/lib/auth/types";
 
@@ -19,7 +20,7 @@ type Challenge = Omit<OtpChallenge, "requiresOtp"> & {
 };
 
 /** Codes that end the OTP step and send the user back to username/password. */
-const RESTART_CODES = ["OTP_CHALLENGE_INVALID", "OTP_MAX_ATTEMPTS", "OTP_MAX_RESENDS"];
+const RESTART_CODES = ["OTP_CHALLENGE_INVALID", "OTP_MAX_ATTEMPTS", "OTP_MAX_RESENDS", "PHONE_VERIFICATION_INVALID"];
 
 /** Ticks once a second while `active`, returning Date.now(). */
 function useNow(active: boolean) {
@@ -54,6 +55,10 @@ export function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
   const [resending, setResending] = useState(false);
+  const [smsSent, setSmsSent] = useState(false);
+  const phoneLogin = useRef<FirebasePhoneLogin | null>(null);
+  const busyRef = useRef(false);
+  useEffect(() => () => phoneLogin.current?.dispose(), []);
   const otpRef = useRef<HTMLInputElement>(null);
   const now = useNow(!!challenge);
 
@@ -64,16 +69,20 @@ export function LoginForm() {
   }, [status, user, params, router]);
 
   useEffect(() => {
-    if (challenge) otpRef.current?.focus();
-  }, [challenge]);
+    if (challenge && smsSent) otpRef.current?.focus();
+  }, [challenge, smsSent]);
 
   if (status === "loading" || status === "authenticated") {
     return <FullPageLoader label={status === "authenticated" ? "Signing you in…" : "Loading…"} />;
   }
 
   const restart = (message: string) => {
+    phoneLogin.current?.dispose();
+    phoneLogin.current=null;
     setChallenge(null);
     setOtp("");
+    setSmsSent(false);
+    setFieldErrors({});
     setPassword("");
     setInfo(null);
     setError(message);
@@ -81,14 +90,17 @@ export function LoginForm() {
 
   const handleCredentials = async (e: FormEvent) => {
     e.preventDefault();
+    if (busyRef.current) return;
     const found: Record<string, string> = {};
     if (!username.trim()) found.username = "Enter your username or email";
     if (!password) found.password = "Enter your password";
     setFieldErrors(found);
     if (Object.keys(found).length) return;
 
+    busyRef.current=true;
     setSubmitting(true);
     setError(null);
+    setInfo(null);
     let location: Coordinates;
     setLocating(true);
     try {
@@ -96,74 +108,106 @@ export function LoginForm() {
     } catch (err) {
       setError((err as Error).message);
       setSubmitting(false);
+      busyRef.current=false;
       return;
     } finally {
       setLocating(false);
     }
     try {
+      const startedAt = Date.now();
       const result = await login(username.trim(), password, location);
       if (result.requiresOtp) {
-        const t = Date.now();
+        setPassword("");
+        setSmsSent(false);
         setChallenge({
           ...result,
-          expiresAt: t + result.expiresIn * 1000,
-          resendAt: t + result.resendAvailableIn * 1000,
+          expiresAt: startedAt + result.expiresIn * 1000,
+          resendAt: startedAt + result.resendAvailableIn * 1000,
           location,
         });
+        const { FirebasePhoneLogin } = await import("@/lib/auth/firebasePhone");
+        phoneLogin.current?.dispose();
+        phoneLogin.current = null;
+        phoneLogin.current = new FirebasePhoneLogin();
+        await phoneLogin.current.send(result.phoneNumber, "firebase-recaptcha");
+        setSmsSent(true);
         setInfo(`We sent a 6-digit OTP to ${result.maskedMobile}.`);
       }
-      // No OTP (Super Admin): the effect above redirects.
+      // Otherwise (an Admin already verified today) the session is applied and the
+      // signed-in redirect above takes over. The Super Admin always verifies.
     } catch (err) {
       if (err instanceof ApiError && err.code === "VALIDATION_ERROR") setFieldErrors(err.details);
       else setError(errorMessage(err));
       setPassword("");
     } finally {
       setSubmitting(false);
+      busyRef.current=false;
     }
   };
 
   const handleOtp = async (e: FormEvent) => {
     e.preventDefault();
-    if (!challenge) return;
+    if (!challenge || !smsSent || !phoneLogin.current || busyRef.current) return;
+    if (Date.now() >= challenge.expiresAt) {
+      restart("Sign-in expired. Please sign in again.");
+      return;
+    }
     if (!/^\d{6}$/.test(otp)) {
       setFieldErrors({ otp: "Enter the 6-digit OTP" });
       return;
     }
+    busyRef.current=true;
     setSubmitting(true);
     setError(null);
     try {
-      await verifyOtp(challenge.challengeId, otp, challenge.location);
+      const firebaseIdToken=await phoneLogin.current!.confirm(otp);
+      await verifyOtp(challenge.challengeId, firebaseIdToken, challenge.location);
+      phoneLogin.current?.dispose();
       // Redirect handled by the effect above.
     } catch (err) {
-      setOtp("");
+      if (!(err instanceof ApiError && (err.status >= 500 || err.code === "NETWORK_ERROR"))) setOtp("");
       if (err instanceof ApiError && RESTART_CODES.includes(err.code)) {
         restart(err.message);
-      } else if (err instanceof ApiError && err.code === "OTP_INVALID") {
-        const left = err.body.attemptsRemaining ?? 0;
-        setError(`Incorrect OTP. ${left} attempt${left === 1 ? "" : "s"} remaining.`);
       } else {
         setError(errorMessage(err));
       }
       otpRef.current?.focus();
     } finally {
       setSubmitting(false);
+      busyRef.current=false;
     }
   };
 
   const handleResend = async () => {
-    if (!challenge) return;
+    if (!challenge || busyRef.current) return;
+    if (Date.now() >= challenge.expiresAt) {
+      restart("Sign-in expired. Please sign in again.");
+      return;
+    }
+    if (Date.now() < challenge.resendAt) return;
+    busyRef.current=true;
     setResending(true);
     setError(null);
+    setInfo(null);
     try {
+      const startedAt = Date.now();
       const result = await resendOtp(challenge.challengeId);
-      const t = Date.now();
+      // The server consumes the resend allowance even if Firebase cannot send.
       setChallenge({
         ...challenge,
         maskedMobile: result.maskedMobile,
-        expiresAt: t + result.expiresIn * 1000,
-        resendAt: t + result.resendAvailableIn * 1000,
+        phoneNumber: result.phoneNumber,
+        expiresAt: Math.min(challenge.expiresAt, startedAt + result.expiresIn * 1000),
+        resendAt: startedAt + result.resendAvailableIn * 1000,
       });
+      if (!phoneLogin.current) {
+        const { FirebasePhoneLogin } = await import("@/lib/auth/firebasePhone");
+        phoneLogin.current = new FirebasePhoneLogin();
+      }
+      await phoneLogin.current.send(result.phoneNumber, "firebase-recaptcha");
+      setSmsSent(true);
       setOtp("");
+      setFieldErrors({});
       setInfo(`A new OTP was sent to ${result.maskedMobile}.`);
     } catch (err) {
       if (err instanceof ApiError && RESTART_CODES.includes(err.code)) restart(err.message);
@@ -173,6 +217,7 @@ export function LoginForm() {
       } else setError(errorMessage(err));
     } finally {
       setResending(false);
+      busyRef.current=false;
     }
   };
 
@@ -182,6 +227,7 @@ export function LoginForm() {
   return (
     <main className="grid min-h-screen place-items-center bg-gradient-to-br from-[#f4f7fc] to-[#e3edfb] px-3 py-6 sm:px-4 sm:py-10">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl shadow-brand/5">
+        <div id="firebase-recaptcha" />
         <div className="flex justify-center">
           <Logo href="/login" />
         </div>
@@ -232,7 +278,7 @@ export function LoginForm() {
               {!submitting && <Icon name="arrowRight" className="size-4" />}
             </button>
             <p className="mt-6 text-center text-xs text-slate-500">
-              Your location is recorded at every sign-in. Accounts are created by the Super Admin.
+              Continue to receive a verification SMS on your registered number. Firebase/Google processes this number for phone verification and abuse prevention. Your location is recorded at every sign-in. Accounts are created by the Super Admin.
               Forgot your password? Contact your Super Admin.
             </p>
           </form>
@@ -243,7 +289,8 @@ export function LoginForm() {
             </span>
             <h1 className="mt-4 text-center text-2xl font-bold text-navy">Verify it&apos;s you</h1>
             <p className="mt-1 text-center text-sm text-slate-600">
-              Enter the OTP sent to <b className="text-navy">{challenge.maskedMobile}</b>
+              {smsSent ? "Enter the OTP sent to " : "Send a verification code to "}
+              <b className="text-navy">{challenge.maskedMobile}</b>
             </p>
 
             <div className="mt-6 space-y-4">
@@ -256,6 +303,7 @@ export function LoginForm() {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}
+                  disabled={!smsSent || submitting || resending || expiresIn <= 0}
                   value={otp}
                   onChange={(e) => {
                     setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
@@ -265,13 +313,13 @@ export function LoginForm() {
                 />
               </Field>
               <p className={`text-center text-xs ${expiresIn > 0 ? "text-slate-500" : "text-red-600"}`}>
-                {expiresIn > 0 ? `OTP expires in ${mmss(expiresIn)}` : "OTP expired — request a new one."}
+                {expiresIn > 0 ? `Sign-in expires in ${mmss(expiresIn)}` : "Sign-in expired. Go back and sign in again."}
               </p>
             </div>
 
             <button
               type="submit"
-              disabled={submitting || otp.length !== 6}
+              disabled={!smsSent || submitting || resending || expiresIn <= 0 || otp.length !== 6}
               className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand text-sm font-medium text-white shadow-sm hover:bg-brand-dark disabled:opacity-60"
             >
               {submitting && <Spinner />}
@@ -281,6 +329,7 @@ export function LoginForm() {
             <div className="mt-4 flex items-center justify-between text-sm">
               <button
                 type="button"
+                disabled={submitting || resending}
                 onClick={() => restart("")}
                 className="text-slate-600 hover:text-navy"
               >
@@ -289,10 +338,10 @@ export function LoginForm() {
               <button
                 type="button"
                 onClick={handleResend}
-                disabled={resendIn > 0 || resending}
+                disabled={resendIn > 0 || resending || submitting || expiresIn <= 0}
                 className="font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
               >
-                {resending ? "Sending…" : resendIn > 0 ? `Resend in ${mmss(resendIn)}` : "Resend OTP"}
+                {resending || submitting && !smsSent ? "Sending…" : resendIn > 0 ? `Retry in ${mmss(resendIn)}` : smsSent ? "Resend OTP" : "Send OTP"}
               </button>
             </div>
           </form>
