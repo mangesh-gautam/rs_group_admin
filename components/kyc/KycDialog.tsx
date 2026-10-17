@@ -238,7 +238,7 @@ function UploadKyc({ account, onDone }: { account: KycTarget; onDone: (r: Result
   };
 
   const fileBox = (key: "panCard" | "aadhaarCard", label: string) => (
-    <label className={`flex cursor-pointer items-center gap-3 rounded-lg border border-dashed bg-white p-3 hover:border-brand/50 ${errors[key] ? "border-red-300" : files[key] ? "border-emerald-300" : "border-slate-300"}`}>
+    <label className={`relative flex cursor-pointer items-center gap-3 rounded-lg border border-dashed bg-white p-3 hover:border-brand/50 ${errors[key] ? "border-red-300" : files[key] ? "border-emerald-300" : "border-slate-300"}`}>
       <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-brand">
         <Icon name={files[key] ? "check" : key === "panCard" ? "creditCard" : "idCard"} className="size-4" />
       </span>

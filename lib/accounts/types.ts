@@ -15,6 +15,9 @@ export const KYC_LABEL: Record<KycStatus, string> = {
   REJECTED: "KYC rejected",
 };
 
+/** CLOSED: an Admin closed the account and settled it — no further transactions. */
+export type AccountStatus = "ACTIVE" | "CLOSED";
+
 /** Row of GET /api/customers/account-holders. */
 export type AccountSummary = {
   id: number;
@@ -28,12 +31,20 @@ export type AccountSummary = {
   amount: string; // opening amount, decimal string, e.g. "5000.00"
   balance: string; // current balance (accounts.account_balances)
   kycStatus: KycStatus;
+  status: AccountStatus;
+  closedAt: string | null;
   office: Omit<OfficeRef, "pincode">;
   createdBy: string;
   createdAt: string;
 };
 
-export type AccountPage = { page: number; pageSize: number; total: number; items: AccountSummary[] };
+export type AccountPage = {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: AccountSummary[];
+  closedCount?: number; // closed accounts matching the other filters (GET /api/admin/accounts)
+};
 
 export type DocumentKind = "panCard" | "aadhaarCard";
 
@@ -80,6 +91,7 @@ export type AccountDetail = Omit<AccountSummary, "office"> & {
   lastWithdrawalAt: string | null;
   totalInterest: string;
   terms: AccountTerms;
+  closure: { closedAt: string; closedBy: string | null; reason: string | null } | null;
   createdById: number;
 };
 
@@ -97,6 +109,8 @@ export type KycAccount = {
   submittedVia: "ADMIN" | "CUSTOMER" | null;
   remarks: string | null;
   balance: string;
+  accountStatus: AccountStatus; // CLOSED: no approval action
+  closedAt: string | null;
   office: Omit<OfficeRef, "pincode">;
   createdAt: string;
 };
@@ -157,9 +171,18 @@ export type TransactionCorrectionEntry = {
 
 export type StatementPage = { page: number; pageSize: number; total: number; items: StatementEntry[]; summary?: { balance: string; totalDeposited: string; totalWithdrawn: string; entryCount: number; lastAt: string | null } };
 
-/** Row of GET /api/customers/account-holders/:accountNo/installments (newest first). */
+/**
+ * Row of GET /api/customers/account-holders/:accountNo/installments (newest first).
+ * Installments are counted per deposit cycle: a cycle starts with a deposit
+ * (the opening, or the first deposit after a withdrawal) and stops at the next
+ * withdrawal or the closure. Nothing is due in between.
+ */
 export type Installment = {
-  installmentNo: number;
+  cycleNo: number;
+  cycleStartOn: string; // YYYY-MM-DD
+  cycleCompleteOn: string; // cycle start + required duration
+  cycleStoppedOn: string | null; // withdrawal / closure that ended the cycle early
+  installmentNo: number; // within the cycle
   dueOn: string; // YYYY-MM-DD
   bufferEndsOn: string; // last day to pay without a fine
   paidOn: string | null; // first deposit counted for this installment

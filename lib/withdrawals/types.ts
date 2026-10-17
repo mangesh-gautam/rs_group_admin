@@ -11,6 +11,9 @@ export type PaymentMode = DepositMode; // same modes for paying out: CASH | UPI 
  */
 export type WithdrawalType = "NORMAL" | "EARLY";
 
+/** CLOSURE: the final settlement of an account closed by an Admin (history only). */
+export type WithdrawalEntryType = WithdrawalType | "CLOSURE";
+
 /** GET/PUT /api/withdrawals/rules — set by the Super Admin, enforced by the backend. */
 export type WithdrawalRules = {
   minDurationMonths: number;
@@ -25,10 +28,15 @@ export type WithdrawalRules = {
 
 export type DepositMonthStatus = "PAID" | "MISSED" | "PENDING";
 
-/** The current deposit cycle of an account (from the first deposit, or the last withdrawal). */
+/**
+ * The active deposit cycle of an account. It starts with an actual deposit
+ * (the first one, or the first after a withdrawal) and ends with a withdrawal
+ * or the account's closure; no deposit is expected and no penalty arises
+ * between a withdrawal and the next deposit.
+ */
 export type DepositCycle = {
   startOn: string; // YYYY-MM-DD
-  startsFrom: "FIRST_DEPOSIT" | "LAST_WITHDRAWAL";
+  startsFrom: "FIRST_DEPOSIT" | "DEPOSIT_AFTER_WITHDRAWAL" | "DEPOSIT_AFTER_CLOSURE";
   endOn: string;
   durationMonths: number;
   eligibleOn: string; // startOn + durationMonths
@@ -70,12 +78,16 @@ export type WithdrawalAccount = {
   withdrawalToday: {
     type: WithdrawalType;
     penaltyRate: string; // "0.00" | "20.00" (% of the amount)
-    allowed: boolean; // false while KYC is not verified or a missed-month penalty is outstanding
+    allowed: boolean; // false when closed, KYC not verified or a missed-month penalty is outstanding
     reasons: string[];
     eligibleFrom: string | null;
     daysUntilNormal: number;
   };
-  cycle: DepositCycle | null; // null: no successful deposit yet
+  status: "ACTIVE" | "CLOSED";
+  closedOn: string | null; // YYYY-MM-DD
+  /** ACTIVE · INACTIVE: withdrawn, no deposit since (nothing expected, no penalty) · NOT_STARTED · CLOSED */
+  cycleState: "ACTIVE" | "INACTIVE" | "NOT_STARTED" | "CLOSED";
+  cycle: DepositCycle | null; // null: no active cycle (see cycleState)
   rules: WithdrawalRules;
   kyc: { status: "PENDING" | "SUBMITTED" | "VERIFIED" | "REJECTED"; verified: boolean }; // only VERIFIED can withdraw
 };
@@ -119,7 +131,8 @@ export type WithdrawalReceipt = WithdrawalCalculation & {
 };
 
 /** Row of GET /api/withdrawals */
-export type WithdrawalEntry = WithdrawalCalculation & {
+export type WithdrawalEntry = Omit<WithdrawalCalculation, "type"> & {
+  type: WithdrawalEntryType;
   receiptNo: string;
   accountNo: string;
   name: string;
@@ -174,4 +187,65 @@ export type WithdrawalQuote = {
   durationMonths: number | null;
   completedMonths: number | null;
   missedMonths: number | null;
+};
+
+/** Why an account can't be closed yet (GET …/closure → blockers). */
+export type ClosureBlocker = {
+  code: "ACTIVE_CYCLE" | "BALANCE" | "PENALTY" | "PENDING_DEPOSIT" | "COMMISSION" | "INTEREST";
+  message: string;
+};
+
+/** The withdrawal that settled an account before it was closed. */
+export type ClosureSettlementWithdrawal = {
+  receiptNo: string | null; // WDL…
+  type: "NORMAL" | "EARLY" | "CLOSURE";
+  amount: string; // balance taken out
+  deduction: string; // early-settlement deduction (0 for NORMAL)
+  netAmount: string; // paid to the holder
+  settledAt: string;
+};
+
+/** Row of GET /api/withdrawals/closures */
+export type ClosureEntry = {
+  accountNo: string;
+  name: string;
+  closedAt: string;
+  closedBy: string;
+  reason: string;
+  remarks: string | null;
+  settlement: ClosureSettlementWithdrawal | null;
+  /** closures before the settle-first rule paid out themselves */
+  legacyPayout: { payable: string; mode: string | null; withdrawalReceiptNo: string | null } | null;
+  office: { name: string; city: string };
+};
+
+/**
+ * GET /api/withdrawals/accounts/:accountNo/closure — an account is closed only
+ * after a full settlement (the complete balance withdrawn at the desk).
+ */
+export type ClosureQuote = {
+  accountNo: string;
+  name: string;
+  status: "ACTIVE" | "CLOSED";
+  closedOn: string | null;
+  today: string;
+  canClose: boolean;
+  blockers: ClosureBlocker[];
+  balance: { principal: string; accruedInterest: string; total: string; commission: string; outstandingPenalty: string };
+  cycle: { startOn: string; eligibleOn: string; missedMonths: number } | null;
+  /** the full-balance withdrawal that settles it today (null: nothing left to settle) */
+  settlement: { type: "NORMAL" | "EARLY"; amount: string; deductionRate: string; deduction: string; payable: string } | null;
+  closure: ClosureEntry | null;
+};
+
+/** POST /api/withdrawals/accounts/:accountNo/close → 201 */
+export type ClosureReceipt = {
+  accountNo: string;
+  name: string;
+  status: "CLOSED";
+  closedAt: string;
+  closedBy: string;
+  reason: string;
+  remarks: string | null;
+  settlement: ClosureSettlementWithdrawal | null;
 };

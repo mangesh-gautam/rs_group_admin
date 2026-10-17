@@ -25,7 +25,9 @@ const monthName = (iso: string) =>
  * Account page → deposit cycle and withdrawal eligibility (withdrawal-service):
  * cycle dates, every month PAID / MISSED / PENDING, missed-month penalty,
  * paid / outstanding, and whether a normal withdrawal is possible today.
- * The backend computes all of it; this only displays it.
+ * A cycle starts with a deposit and ends with a withdrawal or the closure;
+ * in between nothing is expected and no penalty arises. The backend computes
+ * all of it; this only displays it.
  */
 export function AccountWithdrawalCycle({ accountNo }: { accountNo: string }) {
   const { authFetch } = useAuth();
@@ -71,14 +73,20 @@ export function AccountWithdrawalCycle({ accountNo }: { accountNo: string }) {
       ) : !data ? (
         <SkeletonRegion label="Loading account statement…" className="p-5 sm:p-6"><TableSkeleton rows={4} columns={5} /></SkeletonRegion>
       ) : !c ? (
-        <p className="p-5 text-sm text-slate-500 sm:p-6">No successful deposit yet — the cycle starts with the first deposit.</p>
+        <p className="p-5 text-sm text-slate-500 sm:p-6">
+          {data.cycleState === "CLOSED"
+            ? `The account is closed${data.closedOn ? ` (since ${formatDate(data.closedOn)})` : ""} — no deposit cycle, no penalty. A deposit resumes it and starts a new ${data.rules.minDurationMonths}-month cycle.`
+            : data.cycleState === "INACTIVE"
+              ? `No active deposit cycle — the last cycle ended with the withdrawal${data.lastWithdrawalOn ? ` on ${formatDate(data.lastWithdrawalOn)}` : ""}. No deposit is due and no penalty applies until the holder deposits again; that deposit starts a new ${data.rules.minDurationMonths}-month cycle.`
+              : "No successful deposit yet — the cycle starts with the first deposit."}
+        </p>
       ) : (
         <div className="space-y-5 p-5 sm:p-6">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
             <Stat label="Deposit Cycle" value={`${formatDate(c.startOn)} – ${formatDate(c.endOn)}`} wide />
             <Stat
               label="Cycle Starts From"
-              value={c.startsFrom === "FIRST_DEPOSIT" ? "First deposit" : "Last withdrawal"}
+              value={c.startsFrom === "FIRST_DEPOSIT" ? "First deposit" : c.startsFrom === "DEPOSIT_AFTER_CLOSURE" ? "Deposit that resumed the account" : "Deposit after withdrawal"}
             />
             <Stat label="Required Duration" value={`${c.durationMonths} Months`} />
             <Stat label="Next Withdrawal Date" value={formatDate(c.eligibleOn)} />

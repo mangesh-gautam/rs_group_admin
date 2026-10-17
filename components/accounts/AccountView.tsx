@@ -24,6 +24,7 @@ import { AccountTransactions } from "./AccountTransactions";
 import { CorrectionHistory } from "./TransactionCorrections";
 import { AccountReferral } from "./AccountReferral";
 import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
+import { CloseAccountDialog } from "./CloseAccountDialog";
 import { DocumentViewer } from "./DocumentViewer";
 import { KycDialog } from "@/components/kyc/KycDialog";
 import { KycStatusBadge } from "@/components/kyc/KycStatusBadge";
@@ -40,6 +41,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [viewing, setViewing] = useState<DocumentKind | null>(null);
   const [kycOpen, setKycOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closedMessage, setClosedMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0); // bumped after a KYC change to reload the account
 
   useEffect(() => {
@@ -68,12 +71,35 @@ export function AccountView({ accountNo }: { accountNo: string }) {
   const a = account;
   const age = ageFrom(a.dob);
   const kycVerified = a.kyc.status === "VERIFIED";
+  const closed = a.status === "CLOSED";
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <BackLink />
 
-      {!kycVerified && (
+      {closedMessage && <Alert tone="success">{closedMessage}</Alert>}
+
+      {closed && a.closure && (
+        <div className="flex items-start gap-3 rounded-2xl border border-slate-300 bg-slate-100 p-4 text-sm">
+          <Icon name="lock" className="mt-0.5 size-5 shrink-0 text-slate-600" />
+          <div>
+            <p className="font-semibold text-navy">This account is closed</p>
+            <p className="text-slate-700">
+              Closed on {formatDateTime(a.closure.closedAt)}{a.closure.closedBy ? ` by ${a.closure.closedBy}` : ""}
+              {a.closure.reason ? ` — ${a.closure.reason}` : ""}. It was settled in full. A new deposit resumes the
+              account and starts a new deposit cycle.
+            </p>
+          </div>
+          <Link
+            href={`/admin/deposits?accountNo=${a.accountNo}`}
+            className="ml-auto flex h-10 shrink-0 items-center gap-2 self-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
+          >
+            <Icon name="download" className="size-4" /> Resume with a deposit
+          </Link>
+        </div>
+      )}
+
+      {!kycVerified && !closed && (
         <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 ${
           a.kyc.status === "SUBMITTED" ? "border-blue-200 bg-blue-50" : a.kyc.status === "REJECTED" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
           <div className="flex items-start gap-3">
@@ -107,6 +133,9 @@ export function AccountView({ accountNo }: { accountNo: string }) {
         <div className="min-w-0 flex-1">
           <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-bold break-words text-navy sm:text-3xl">
             {a.name} <KycStatusBadge status={a.kyc.status} className="text-xs" />
+            {closed && (
+              <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300">Closed</span>
+            )}
           </h1>
           {a.fatherHusbandName && <p className="mt-0.5 text-sm text-slate-600">C/o {a.fatherHusbandName}</p>}
           <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-sm">
@@ -116,7 +145,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
             <HeaderStat label="Office" value={officeLabel(a.office)} />
           </dl>
         </div>
-        <div className="flex shrink-0 gap-2 self-start sm:flex-col sm:self-center">
+        <div className="flex shrink-0 flex-wrap gap-2 self-start sm:flex-col sm:self-center">
+          {!closed && (<>
           <Link
             href={`/admin/deposits?accountNo=${a.accountNo}`}
             className="flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white shadow-sm hover:bg-brand-dark"
@@ -138,6 +168,7 @@ export function AccountView({ accountNo }: { accountNo: string }) {
               <Icon name="lock" className="size-4" /> Withdraw
             </span>
           )}
+          </>)}
           <Link
             href={`/forms/account-holder-registration/${a.accountNo}?download=1`}
             target="_blank"
@@ -145,6 +176,15 @@ export function AccountView({ accountNo }: { accountNo: string }) {
           >
             <Icon name="fileText" className="size-4" /> Download Form
           </Link>
+          {!closed && (
+            <button
+              type="button"
+              onClick={() => setCloseOpen(true)}
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-5 text-sm font-medium text-red-700 hover:bg-red-50"
+            >
+              <Icon name="lock" className="size-4" /> Close Account
+            </button>
+          )}
         </div>
       </section>
 
@@ -181,7 +221,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
                   {a.kyc.verifiedBy ? `by ${a.kyc.verifiedBy} · ` : ""}{formatDateTime(a.kyc.verifiedAt)}
                 </span>
               )}
-              {!kycVerified && (
+              {!kycVerified && closed && <span className="text-xs text-slate-500">Account closed — no KYC review</span>}
+              {!kycVerified && !closed && (
                 <button type="button" onClick={() => setKycOpen(true)} className="text-xs font-medium text-brand hover:underline">
                   {a.kyc.status === "SUBMITTED" ? "Review documents" : "Complete KYC"}
                 </button>
@@ -271,6 +312,26 @@ export function AccountView({ accountNo }: { accountNo: string }) {
           onClose={() => setKycOpen(false)}
           onDone={() => {
             setKycOpen(false);
+            setVersion((v) => v + 1);
+          }}
+        />
+      )}
+
+      {closeOpen && (
+        <CloseAccountDialog
+          accountNo={a.accountNo}
+          name={a.name}
+          onCancel={() => setCloseOpen(false)}
+          onDone={(r) => {
+            setCloseOpen(false);
+            setClosedMessage(
+              "Account closed." +
+                (r.settlement
+                  ? ` Settled by ${r.settlement.receiptNo} (${r.settlement.type === "EARLY" ? "early settlement" : "final withdrawal"}): ` +
+                    `${formatAmount(r.settlement.netAmount)} paid` +
+                    (Number(r.settlement.deduction) > 0 ? `, ${formatAmount(r.settlement.deduction)} deducted` : "") + "."
+                  : ""),
+            );
             setVersion((v) => v + 1);
           }}
         />

@@ -49,8 +49,10 @@ export type DepositAccount = {
   lastDepositAt: string | null;
   totalInterest: string;
   terms: AccountTerms;
-  nextDueOn: string | null; // YYYY-MM-DD
+  nextDueOn: string | null; // YYYY-MM-DD; null: no deposit cycle running (nothing due)
   finesApplicable: number; // installments not paid within their buffer
+  status: "ACTIVE" | "CLOSED"; // CLOSED: the next deposit resumes it (new deposit cycle)
+  closedOn: string | null; // YYYY-MM-DD
 };
 
 /** POST /api/deposits → 201 */
@@ -66,6 +68,7 @@ export type DepositReceipt = {
   depositedAt: string;
   createdBy: string;
   commission?: { levels: number; total: string }; // referral commission paid to the depositor's upline
+  resumed?: boolean; // this deposit resumed a closed account and started a new deposit cycle
 };
 
 /** Row of GET /api/deposits */

@@ -27,9 +27,10 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [officeId, setOfficeId] = useState("");
+  const [onlyClosed, setOnlyClosed] = useState(false);
   const [page, setPage] = useState(1);
   const [version, setVersion] = useState(0);
-  const key = `${q}|${officeId}|${page}|${version}`;
+  const key = `${q}|${officeId}|${onlyClosed}|${page}|${version}`;
   const [result, setResult] = useState<{ key: string; data: AccountPage | null; error: string | null }>({
     key: "",
     data: null,
@@ -50,6 +51,7 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
     const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
     if (q) params.set("q", q);
     if (officeId) params.set("officeId", officeId);
+    if (onlyClosed) params.set("status", "CLOSED");
     authFetch<AccountPage>(`/api/admin/accounts?${params}`, { signal: controller.signal }).then(
       (data) => setResult({ key, data, error: null }),
       (err) => {
@@ -57,19 +59,19 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
       },
     );
     return () => controller.abort();
-  }, [authFetch, q, officeId, page, key]);
+  }, [authFetch, q, officeId, onlyClosed, page, key]);
 
   const loading = result.key !== key;
   const data = result.data;
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   const open = (accountNo: string) => router.push(`${basePath}/${accountNo}`);
-  const filtered = !!(q || officeId);
+  const filtered = !!(q || officeId || onlyClosed);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-navy sm:text-3xl">All Accounts</h1>
+          <h1 className="text-2xl font-bold text-navy sm:text-3xl">{onlyClosed ? "Closed Accounts" : "All Accounts"}</h1>
           <p className="mt-1 text-sm text-slate-600">
             {isSuperAdmin
               ? "Every account holder across all offices."
@@ -110,6 +112,25 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
               }}
             />
           )}
+          <button
+            type="button"
+            aria-pressed={onlyClosed}
+            onClick={() => {
+              setOnlyClosed((v) => !v);
+              setPage(1);
+            }}
+            className={`flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-medium whitespace-nowrap ${
+              onlyClosed
+                ? "border-slate-700 bg-slate-700 text-white hover:bg-slate-800"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <Icon name="lock" className="size-4" />
+            {onlyClosed ? "Show all accounts" : "Closed accounts"}
+            {!onlyClosed && data?.closedCount !== undefined && (
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{data.closedCount}</span>
+            )}
+          </button>
           {data && (
             <span className="text-xs text-slate-500">
               {data.total} account{data.total === 1 ? "" : "s"}
@@ -135,7 +156,12 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
                 <li key={a.id}>
                   <Link href={`${basePath}/${a.accountNo}`} className="flex items-start gap-3 p-4 active:bg-slate-50">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-navy">{a.name}</p>
+                      <p className="truncate font-medium text-navy">
+                        {a.name}
+                        {a.status === "CLOSED" && (
+                          <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">Closed</span>
+                        )}
+                      </p>
                       <p className="font-mono text-xs text-slate-600">{a.accountNo}</p>
                       <p className="mt-0.5 text-xs text-slate-500">
                         +91 {a.mobileNumber} · {a.city} · {formatAmount(a.balance)}
@@ -147,7 +173,7 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
               ))}
               {data && data.items.length === 0 && (
                 <li className="px-4 py-12 text-center text-sm text-slate-500">
-                  {filtered ? "No accounts match your search." : "No accounts have been opened yet."}
+                  {onlyClosed ? (q || officeId ? "No closed accounts match your search." : "No accounts have been closed.") : filtered ? "No accounts match your search." : "No accounts have been opened yet."}
                 </li>
               )}
             </ul>
@@ -182,7 +208,12 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
                       <td className="px-4 py-3">
                         <p className="font-medium text-navy">{a.name}</p>
                         {a.fatherHusbandName && <p className="text-xs text-slate-500">C/o {a.fatherHusbandName}</p>}
-                        {a.kycStatus && a.kycStatus !== "VERIFIED" && <KycStatusBadge status={a.kycStatus} className="mt-1" />}
+                        {a.kycStatus && a.kycStatus !== "VERIFIED" && a.status !== "CLOSED" && <KycStatusBadge status={a.kycStatus} className="mt-1" />}
+                        {a.status === "CLOSED" && (
+                          <span className="mt-1 inline-block rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-300">
+                            Closed{a.closedAt ? ` · ${formatDateTime(a.closedAt)}` : ""}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{a.mobileNumber}</td>
                       <td className="px-4 py-3 text-slate-700">{a.city}</td>
@@ -197,7 +228,7 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
                   {data && data.items.length === 0 && (
                     <tr>
                       <td colSpan={isSuperAdmin ? 8 : 7} className="px-4 py-12 text-center text-sm text-slate-500">
-                        {filtered ? "No accounts match your search." : "No accounts have been opened yet."}
+                        {onlyClosed ? (q || officeId ? "No closed accounts match your search." : "No accounts have been closed.") : filtered ? "No accounts match your search." : "No accounts have been opened yet."}
                       </td>
                     </tr>
                   )}

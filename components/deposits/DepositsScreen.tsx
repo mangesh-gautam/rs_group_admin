@@ -137,7 +137,7 @@ function DepositDesk({
     setErrors(found);
     if (Object.keys(found).length) return;
 
-    if (!window.confirm(`Deposit ${money(values.amount)} (${modeLabel(values.mode as DepositMode)}) into ${account.accountNo} — ${account.name}?`)) {
+    if (!window.confirm(`Deposit ${money(values.amount)} (${modeLabel(values.mode as DepositMode)}) into ${account.accountNo} — ${account.name}?${account.status === "CLOSED" ? "\n\nThis account is closed: the deposit resumes it and starts a new deposit cycle." : ""}`)) {
       return;
     }
 
@@ -156,6 +156,7 @@ function DepositDesk({
           depositCount: a.depositCount + 1,
           totalDeposited: (Number(a.totalDeposited) + Number(result.amount)).toFixed(2),
           lastDepositAt: result.depositedAt,
+          ...(result.resumed ? { status: "ACTIVE" as const, closedOn: null } : {}),
         },
       );
       setValues(EMPTY);
@@ -239,6 +240,7 @@ function DepositDesk({
               {accountTypeLabel(account.terms.accountType)} account · interest {account.terms.interestRate}% p.m. · buffer{" "}
               {account.terms.bufferDays} days
               {account.nextDueOn && ` · next due ${formatDate(account.nextDueOn)}`}
+              {account.status === "ACTIVE" && !account.nextDueOn && " · no deposit cycle running — the next deposit starts a new one"}
             </p>
             {account.finesApplicable > 0 && (
               <p className="mt-1 inline-block rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-200">
@@ -252,8 +254,11 @@ function DepositDesk({
       {receipt && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <p className="flex items-center gap-2 font-semibold">
-            <Icon name="checkCircle" className="size-5" /> Deposit recorded
+            <Icon name="checkCircle" className="size-5" /> Deposit recorded{receipt.resumed ? " — account resumed" : ""}
           </p>
+          {receipt.resumed && (
+            <p className="mt-1 text-xs">The account is active again; a new deposit cycle starts with this deposit.</p>
+          )}
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
             <ReceiptItem label="Receipt No." value={receipt.receiptNo} mono />
             <ReceiptItem label="Amount" value={money(receipt.amount)} />
@@ -270,6 +275,14 @@ function DepositDesk({
             </p>
           )}
         </div>
+      )}
+
+      {account?.status === "CLOSED" && (
+        <Alert tone="warning">
+          <b>This account is closed</b>
+          {account.closedOn ? ` (since ${formatDate(account.closedOn)})` : ""} and was settled. Recording a deposit will{" "}
+          <b>resume the account</b>: it becomes active again and a new deposit cycle starts from this deposit.
+        </Alert>
       )}
 
       {/* Step 2 — amount */}

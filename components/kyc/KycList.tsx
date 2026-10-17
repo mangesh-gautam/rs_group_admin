@@ -136,11 +136,19 @@ export function KycList() {
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-navy">{formatAmount(a.balance)}</td>
                 <td className="px-4 py-3 text-right">
+                  {a.accountStatus === "CLOSED" ? (
+                    // a closed account is settled: no KYC approval — open the account instead
+                    <Link href={`/admin/accounts/${a.accountNo}`}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3.5 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-200">
+                      <Icon name="lock" className="size-3.5" /> Account closed
+                    </Link>
+                  ) : (
                   <button type="button" onClick={() => setOpen(a)}
                     className={`h-9 rounded-lg px-3.5 text-xs font-medium whitespace-nowrap ${
                       a.status === "SUBMITTED" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-brand text-white hover:bg-brand-dark"}`}>
                     {a.status === "SUBMITTED" ? "Review documents" : "Complete KYC"}
                   </button>
+                  )}
                 </td>
               </tr>
             ))}

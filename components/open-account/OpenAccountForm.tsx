@@ -335,7 +335,9 @@ export function OpenAccountForm() {
             Photograph<span className="text-red-500"> *</span>
           </span>
           <label
-            className={`grid aspect-[35/45] w-full cursor-pointer place-items-center overflow-hidden rounded-lg border-2 border-dashed bg-slate-50 text-center transition hover:border-brand/50 ${
+            // relative: keeps the sr-only file input inside this box — otherwise focusing it after a pick
+            // scrolls the whole page (and the app shell) up to where the input sits
+            className={`relative grid aspect-[35/45] w-full cursor-pointer place-items-center overflow-hidden rounded-lg border-2 border-dashed bg-slate-50 text-center transition hover:border-brand/50 ${
               errors.photo ? "border-red-300" : photoUrl ? "border-emerald-300" : "border-slate-300"
             }`}
           >
@@ -511,7 +513,7 @@ export function OpenAccountForm() {
             return (
               <label
                 key={doc.key}
-                className={`grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border border-dashed bg-white p-3 transition hover:border-brand/50 ${
+                className={`relative grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border border-dashed bg-white p-3 transition hover:border-brand/50 ${
                   err ? "border-red-300" : file ? "border-emerald-300" : "border-slate-300"
                 }`}
               >

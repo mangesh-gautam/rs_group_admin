@@ -36,7 +36,9 @@ export default function SuperAdminLayout({ children }: LayoutProps<"/super-admin
   return (
     <RequireAuth roles={["SUPER_ADMIN"]}>
       <MobileNavProvider>
-        <div className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
+        {/* relative + overflow-clip: nothing inside (e.g. a hidden file input that gets focus) can make
+            the page taller or scroll it — only <main> and the sidebar scroll */}
+        <div className="relative flex h-dvh flex-col overflow-clip print:h-auto print:overflow-visible">
           <SuperAdminHeader />
           <div className="flex min-h-0 flex-1 overflow-hidden print:overflow-visible">
             <SuperAdminSidebar items={SUPER_ADMIN_NAV} notice={SIDEBAR_NOTICE} />

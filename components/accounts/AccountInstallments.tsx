@@ -1,7 +1,7 @@
 "use client";
 
 import { SkeletonRegion, TableSkeleton } from "@/components/ui/Skeleton";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Alert } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
 import { formatDate, type Installment, type InstallmentSchedule } from "@/lib/accounts/types";
@@ -11,8 +11,10 @@ import { accountTypeLabel, money } from "@/lib/deposits/types";
 
 /**
  * Account page → installments: each due date (daily / weekly / monthly from
- * the opening day, by account type), the last day of its buffer, when it was paid and whether a fine is
- * applicable. The rule itself lives in the DB (accounts.fn_is_fine_applicable).
+ * the start of its deposit cycle, by account type), the last day of its buffer, when it was paid and whether a fine is
+ * applicable. A cycle starts with a deposit (the opening, or the first deposit after a withdrawal) and stops at the
+ * next withdrawal or the closure — nothing is due in between. The rule itself lives in the DB
+ * (accounts.fn_installment_schedule / fn_is_fine_applicable).
  */
 export function AccountInstallments({ accountNo, totalInterest }: { accountNo: string; totalInterest: string }) {
   const { authFetch } = useAuth();
@@ -71,8 +73,17 @@ export function AccountInstallments({ accountNo, totalInterest }: { accountNo: s
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.items.map((i) => (
-                  <tr key={i.installmentNo}>
+                {data.items.map((i, n) => (
+                  <Fragment key={`${i.cycleNo}-${i.installmentNo}`}>
+                  {(n === 0 || data.items[n - 1].cycleNo !== i.cycleNo) && (
+                    <tr className="bg-slate-50/70">
+                      <td colSpan={6} className="px-4 py-2 text-xs font-medium text-slate-600">
+                        Cycle {i.cycleNo} · {formatDate(i.cycleStartOn)} – {formatDate(i.cycleStoppedOn ?? i.cycleCompleteOn)}
+                        {i.cycleStoppedOn ? " · ended by withdrawal / closure" : today() >= i.cycleCompleteOn ? " · completed" : " · running"}
+                      </td>
+                    </tr>
+                  )}
+                  <tr>
                     <td className="px-4 py-3 text-slate-700">{i.installmentNo}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-navy">{formatDate(i.dueOn)}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-slate-600">{formatDate(i.bufferEndsOn)}</td>
@@ -84,6 +95,7 @@ export function AccountInstallments({ accountNo, totalInterest }: { accountNo: s
                       <StatusBadge installment={i} />
                     </td>
                   </tr>
+                  </Fragment>
                 ))}
                 {data.items.length === 0 && (
                   <tr>
@@ -108,7 +120,9 @@ function StatusBadge({ installment: i }: { installment: Installment }) {
     ? ["Fine applicable", "bg-red-50 text-red-700 ring-red-200"]
     : i.paidOn
       ? ["Paid", "bg-emerald-50 text-emerald-700 ring-emerald-200"]
-      : today() <= i.dueOn
+      : i.cycleStoppedOn && i.cycleStoppedOn <= i.bufferEndsOn
+        ? ["Not required (cycle ended)", "bg-slate-50 text-slate-500 ring-slate-200"]
+        : today() <= i.dueOn
         ? ["Upcoming", "bg-slate-50 text-slate-600 ring-slate-200"]
         : ["In buffer", "bg-amber-50 text-amber-700 ring-amber-200"];
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${cls}`}>{label}</span>;

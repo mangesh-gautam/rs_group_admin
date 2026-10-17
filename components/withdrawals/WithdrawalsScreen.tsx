@@ -36,7 +36,7 @@ const deduction = (amount: number, rate: string) => Math.round(Math.round(amount
  * cycle isn't complete) → receipt) and the withdrawal history.
  * Paying out refreshes the history. The backend decides all of it.
  */
-export function WithdrawalsScreen({ initialAccountNo }: { initialAccountNo: string }) {
+export function WithdrawalsScreen({ initialAccountNo, settle = false }: { initialAccountNo: string; settle?: boolean }) {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [focusAccount, setFocusAccount] = useState<string | null>(null);
 
@@ -44,6 +44,7 @@ export function WithdrawalsScreen({ initialAccountNo }: { initialAccountNo: stri
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       <WithdrawalDesk
         initialAccountNo={initialAccountNo}
+        settle={settle}
         onAccount={setFocusAccount}
         onWithdrawn={() => setHistoryVersion((v) => v + 1)}
       />
@@ -60,10 +61,13 @@ const EMPTY: Values = { amount: "", mode: "CASH", referenceNo: "", remarks: "" }
 
 function WithdrawalDesk({
   initialAccountNo,
+  settle,
   onAccount,
   onWithdrawn,
 }: {
   initialAccountNo: string;
+  /** final settlement before closing: pre-fill the complete balance for the initial account */
+  settle: boolean;
   onAccount: (accountNo: string | null) => void;
   onWithdrawn: () => void;
 }) {
@@ -98,7 +102,11 @@ function WithdrawalDesk({
         setAccount(found);
         setAccountInput(found.accountNo);
         onAccount(found.accountNo);
-        setValues(EMPTY);
+        setValues(
+          settle && found.accountNo === normaliseAccountNo(initialAccountNo) && Number(found.balance) > 0
+            ? { ...EMPTY, amount: Number(found.balance).toFixed(2), remarks: "Final settlement before account closure" }
+            : EMPTY,
+        );
         setTimeout(() => amountRef.current?.focus(), 0);
       } catch (err) {
         setAccount(null);
@@ -113,7 +121,7 @@ function WithdrawalDesk({
         setFinding(false);
       }
     },
-    [authFetch, onAccount],
+    [authFetch, onAccount, settle, initialAccountNo],
   );
 
   // Pre-filled from ?accountNo=… → look it up once.
@@ -283,6 +291,17 @@ function WithdrawalDesk({
             </p>
           </div>
         </div>
+      )}
+
+      {settle && account && account.accountNo === normaliseAccountNo(initialAccountNo) && (
+        <Alert tone="info">
+          <b>Final settlement before closing the account.</b> The complete balance is withdrawn —{" "}
+          {terms?.type === "EARLY"
+            ? `an early settlement: ${Number(terms.penaltyRate)}% of the amount is deducted and recorded separately.`
+            : "the cycle is complete, so it is paid in full."}{" "}
+          When the balance is ₹0,{" "}
+          <Link href={`/admin/accounts/${account.accountNo}`} className="font-medium underline">close the account</Link> from its page.
+        </Alert>
       )}
 
       {account && terms && <CycleStatus account={account} />}
@@ -483,8 +502,8 @@ function CycleStatus({ account }: { account: WithdrawalAccount }) {
       ) : (
         <Alert tone="info">
           <b>Normal withdrawal</b> — no deduction. The deposit cycle is complete
-          {c ? ` (${c.completedMonths}/${c.durationMonths} months)` : ""}. A new {account.rules.minDurationMonths}-month
-          cycle starts with this withdrawal.
+          {c ? ` (${c.completedMonths}/${c.durationMonths} months)` : ""}. This withdrawal ends the cycle; the next
+          deposit starts a new {account.rules.minDurationMonths}-month cycle (no deposit is due until then).
         </Alert>
       )}
     </div>
@@ -768,7 +787,11 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <p className="font-semibold text-red-600">−{money(w.amount)}</p>
-                    {w.type === "EARLY" ? (
+                    {w.type === "CLOSURE" ? (
+                      <p className="text-[11px] text-slate-600">
+                        Account closure{Number(w.penalty) > 0 ? ` · penalty −${money(w.penalty)}` : ""} · paid {money(w.netAmount)}
+                      </p>
+                    ) : w.type === "EARLY" ? (
                       <p className="text-[11px] text-amber-700">
                         Early −{money(w.penalty)} · paid {money(w.netAmount)}
                       </p>

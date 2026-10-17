@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 /** /admin/withdrawals?accountNo=RS110033000001 pre-fills the account (e.g. from the account page). */
 export default async function WithdrawalsPage({ searchParams }: PageProps<"/admin/withdrawals">) {
-  const { accountNo } = await searchParams;
+  const { accountNo, settle } = await searchParams;
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="flex items-center gap-4">
@@ -22,7 +22,8 @@ export default async function WithdrawalsPage({ searchParams }: PageProps<"/admi
           <p className="text-sm text-slate-600">Withdraw an amount from a member account and review withdrawals.</p>
         </div>
       </div>
-      <WithdrawalsScreen initialAccountNo={typeof accountNo === "string" ? accountNo : ""} />
+      {/* ?settle=1: final settlement before closing — the complete balance is pre-filled */}
+      <WithdrawalsScreen initialAccountNo={typeof accountNo === "string" ? accountNo : ""} settle={settle === "1"} />
     </div>
   );
 }
