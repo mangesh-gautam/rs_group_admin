@@ -21,6 +21,7 @@ import { formatDateTime, officeLabel } from "@/lib/auth/types";
 import { AccountInstallments } from "./AccountInstallments";
 import { AccountMonthlyInterest } from "./AccountMonthlyInterest";
 import { AccountTransactions } from "./AccountTransactions";
+import { CorrectionHistory } from "./TransactionCorrections";
 import { AccountReferral } from "./AccountReferral";
 import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
 import { DocumentViewer } from "./DocumentViewer";
@@ -34,7 +35,7 @@ const DOC_LABEL: Record<DocumentKind, string> = {
 
 /** All Accounts → one account: every registration-form field, photo and documents. */
 export function AccountView({ accountNo }: { accountNo: string }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [account, setAccount] = useState<AccountDetail | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [viewing, setViewing] = useState<DocumentKind | null>(null);
@@ -243,13 +244,16 @@ export function AccountView({ accountNo }: { accountNo: string }) {
 
       <AccountReferral accountNo={a.accountNo} />
 
-      <AccountWithdrawalCycle accountNo={a.accountNo} />
+      {/* keyed by version: reload after a KYC change or a Super Admin correction */}
+      <AccountWithdrawalCycle key={`cycle-${version}`} accountNo={a.accountNo} />
 
-      <AccountMonthlyInterest accountNo={a.accountNo} />
+      <AccountMonthlyInterest key={`interest-${version}`} accountNo={a.accountNo} />
 
-      <AccountInstallments accountNo={a.accountNo} totalInterest={a.totalInterest} />
+      <AccountInstallments key={`installments-${version}`} accountNo={a.accountNo} totalInterest={a.totalInterest} />
 
-      <AccountTransactions accountNo={a.accountNo} />
+      <AccountTransactions accountNo={a.accountNo} name={a.name} onChanged={() => setVersion((v) => v + 1)} />
+
+      {user?.role === "SUPER_ADMIN" && <CorrectionHistory key={`corrections-${version}`} accountNo={a.accountNo} />}
 
       {kycOpen && (
         <KycDialog

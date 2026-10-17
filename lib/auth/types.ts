@@ -77,11 +77,21 @@ export const canAccessPath = (role: Role, path: string) =>
   path.startsWith("/super-admin") ? role === "SUPER_ADMIN" : true;
 
 /** Only same-site, role-permitted paths are honoured as ?next= targets. */
+/**
+ * Where to go after sign-in: only a path on THIS site (no //host, /\host,
+ * schemes or control characters), never back to /login, and only where the
+ * role may go; anything else → the role's home.
+ */
 export function safeNext(next: string | null, role: Role) {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) {
+  if (!next || !/^\/(?![/\\])[^\s\\]*$/.test(next) || next.startsWith("/login")) return homeFor(role);
+  try {
+    const url = new URL(next, "https://admin.invalid");
+    if (url.origin !== "https://admin.invalid") return homeFor(role);
+    const path = url.pathname + url.search + url.hash;
+    return canAccessPath(role, url.pathname) ? path : homeFor(role);
+  } catch {
     return homeFor(role);
   }
-  return canAccessPath(role, next) ? next : homeFor(role);
 }
 
 export const formatDateTime = (iso: string | null) =>

@@ -131,6 +131,28 @@ export type StatementEntry = {
   createdBy: string;
   operator?: { id: number | null; name: string; username: string | null; role: string };
   office?: { id: number; name: string; city: string };
+  /** Super Admin only: may this entry still be corrected (window, closed month, kind)? */
+  correction?: { editable: boolean; deletable: boolean; until: string; reason: string | null } | null;
+};
+
+/** Row of GET /api/admin/transaction-corrections — a Super Admin edit or delete. */
+export type TransactionCorrectionEntry = {
+  id: number;
+  action: "EDIT" | "DELETE";
+  type: StatementType;
+  receiptNo: string;
+  accountNo: string;
+  name: string;
+  amountBefore: string;
+  amountAfter: string | null;
+  before: { mode: string | null; referenceNo: string | null; remarks: string | null; at: string | null };
+  after: { mode: string | null; referenceNo: string | null; remarks: string | null } | null;
+  commissionRemoved: number;
+  balanceBefore: string;
+  balanceAfter: string;
+  reason: string;
+  at: string;
+  by: string;
 };
 
 export type StatementPage = { page: number; pageSize: number; total: number; items: StatementEntry[]; summary?: { balance: string; totalDeposited: string; totalWithdrawn: string; entryCount: number; lastAt: string | null } };

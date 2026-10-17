@@ -8,10 +8,11 @@ import { Icon } from "@/components/icons";
 import { errorMessage } from "@/lib/auth/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { formatDateTime } from "@/lib/auth/types";
-import type { StatementPage, StatementType } from "@/lib/accounts/types";
+import type { StatementEntry, StatementPage, StatementType } from "@/lib/accounts/types";
 import { DEPOSIT_MODES as PAYMENT_MODES, modeLabel, money, type DepositMode } from "@/lib/deposits/types";
 
 import { TransactionCsvExporter } from "@/lib/accounts/TransactionCsvExporter";
+import { AddInterestDialog, DeleteTransactionDialog, EditTransactionDialog } from "./TransactionCorrections";
 
 const PAGE_SIZE = 20;
 const exporter = new TransactionCsvExporter();
@@ -19,10 +20,25 @@ const exporter = new TransactionCsvExporter();
 /**
  * Shared role-aware account statement, newest first, like a passbook:
  * deposits (credit), withdrawals (debit) and the balance right after each
- * entry (GET /api/admin/accounts/:accountNo/transactions).
+ * entry (GET /api/admin/accounts/:accountNo/transactions). The Super Admin
+ * can also correct or delete an entry within the correction window, and add
+ * interest; `onChanged` lets the account page reload its balances afterwards.
  */
-export function AccountTransactions({ accountNo }: { accountNo: string }) {
-  const { authFetch } = useAuth();
+export function AccountTransactions({ accountNo, name, onChanged }: { accountNo: string; name?: string; onChanged?: () => void }) {
+  const { authFetch, user } = useAuth();
+  const isSuper = user?.role === "SUPER_ADMIN";
+  const [editing, setEditing] = useState<StatementEntry | null>(null);
+  const [deleting, setDeleting] = useState<StatementEntry | null>(null);
+  const [addingInterest, setAddingInterest] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const corrected = (message: string) => {
+    setEditing(null);
+    setDeleting(null);
+    setAddingInterest(false);
+    setNotice(message);
+    setVersion((v) => v + 1);
+    onChanged?.();
+  };
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const completeExport = async () => {
@@ -116,6 +132,12 @@ export function AccountTransactions({ accountNo }: { accountNo: string }) {
           className="flex min-h-9 items-center gap-1.5 rounded-lg border border-brand px-3 text-sm text-brand disabled:opacity-50">
           <Icon name="download" className="size-4" /> {exporting ? "Exporting…" : "Export all transactions"}
         </button>
+        {isSuper && (
+          <button type="button" onClick={() => setAddingInterest(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300 px-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+            <Icon name="gift" className="size-4" /> Add interest
+          </button>
+        )}
         <Link
           href={`/admin/deposits?accountNo=${accountNo}`}
           className="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
@@ -131,6 +153,7 @@ export function AccountTransactions({ accountNo }: { accountNo: string }) {
       </div>
 
       {exportError && <div className="p-4"><Alert tone="error">{exportError}</Alert></div>}
+      {notice && <div className="p-4 pb-0"><Alert tone="success">{notice}</Alert></div>}
       {/* Super Admin summary, provided by the same role-aware API. */}
       {data?.summary && <dl className="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 lg:grid-cols-5">
         <Stat label="Current Balance" value={money(data.summary.balance)} strong />
@@ -174,6 +197,7 @@ export function AccountTransactions({ accountNo }: { accountNo: string }) {
                     <p className="font-semibold text-emerald-700">+{money(t.credit)}</p>
                   )}
                   <p className="text-xs text-slate-500">Bal {money(t.balanceAfter)}</p>
+                  {isSuper && <div className="mt-2"><RowActions t={t} onEdit={setEditing} onDelete={setDeleting} /></div>}
                 </div>
               </li>
             ))}
@@ -193,10 +217,11 @@ export function AccountTransactions({ accountNo }: { accountNo: string }) {
                   <th className="px-4 py-3 text-right font-medium">Debit</th>
                   <th className="px-4 py-3 text-right font-medium">Credit</th>
                   <th className="px-4 py-3 text-right font-medium">Balance</th>
+                  {isSuper && <th className="px-4 py-3 text-right font-medium"><span className="sr-only">Correct</span></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading && !data && <Skeleton as="tr" />}
+                {loading && !data && <Skeleton as="tr" cols={isSuper ? 9 : 8} />}
                 {data?.items.map((t) => (
                   <tr key={t.receiptNo} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3 text-xs whitespace-nowrap text-slate-600">{formatDateTime(t.at)}</td>
@@ -229,9 +254,10 @@ export function AccountTransactions({ accountNo }: { accountNo: string }) {
                       {t.type === "DEPOSIT" ? `+${money(t.credit)}` : ""}
                     </td>
                     <td className="px-4 py-3 text-right font-medium whitespace-nowrap text-navy">{money(t.balanceAfter)}</td>
+                    {isSuper && <td className="px-4 py-3"><RowActions t={t} onEdit={setEditing} onDelete={setDeleting} /></td>}
                   </tr>
                 ))}
-                {data && data.items.length === 0 && <Empty filtered={filtered} as="tr" />}
+                {data && data.items.length === 0 && <Empty filtered={filtered} as="tr" cols={isSuper ? 9 : 8} />}
               </tbody>
             </table>
           </div>
@@ -256,7 +282,33 @@ export function AccountTransactions({ accountNo }: { accountNo: string }) {
           )}
         </>
       )}
+      {editing && <EditTransactionDialog entry={editing} onDone={corrected} onCancel={() => setEditing(null)} />}
+      {deleting && <DeleteTransactionDialog entry={deleting} onDone={corrected} onCancel={() => setDeleting(null)} />}
+      {addingInterest && <AddInterestDialog accountNo={accountNo} name={name} onDone={corrected} onCancel={() => setAddingInterest(false)} />}
     </section>
+  );
+}
+
+/** Super Admin: Edit / Delete while the entry can still be corrected, otherwise a lock with the reason. */
+function RowActions({ t, onEdit, onDelete }: { t: StatementEntry; onEdit: (t: StatementEntry) => void; onDelete: (t: StatementEntry) => void }) {
+  const c = t.correction;
+  if (!c) return null;
+  if (!c.editable) {
+    return (
+      <span className="flex justify-end text-slate-400" title={c.reason ?? "Can no longer be corrected"}>
+        <Icon name="lock" className="size-4" /><span className="sr-only">{c.reason}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex justify-end gap-1.5" title={`Can be corrected until ${formatDateTime(c.until)}`}>
+      <button type="button" onClick={() => onEdit(t)}
+        className="h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-navy hover:bg-slate-50">Edit</button>
+      {c.deletable && (
+        <button type="button" onClick={() => onDelete(t)}
+          className="h-8 rounded-lg border border-red-200 px-2.5 text-xs font-medium text-red-600 hover:bg-red-50">Delete</button>
+      )}
+    </span>
   );
 }
 
@@ -274,7 +326,7 @@ function Stat({ label, value, strong, tone }: { label: string; value: string; st
   );
 }
 
-function Skeleton({ as }: { as: "li" | "tr" }) {
+function Skeleton({ as, cols = 8 }: { as: "li" | "tr"; cols?: number }) {
   return Array.from({ length: 4 }, (_, i) =>
     as === "li" ? (
       <li key={i} className="p-4">
@@ -282,7 +334,7 @@ function Skeleton({ as }: { as: "li" | "tr" }) {
       </li>
     ) : (
       <tr key={i}>
-        <td colSpan={8} className="px-4 py-4">
+        <td colSpan={cols} className="px-4 py-4">
           <SkeletonBlock className="h-5 rounded" />
         </td>
       </tr>
@@ -290,13 +342,13 @@ function Skeleton({ as }: { as: "li" | "tr" }) {
   );
 }
 
-function Empty({ filtered, as }: { filtered: boolean; as: "li" | "tr" }) {
+function Empty({ filtered, as, cols = 8 }: { filtered: boolean; as: "li" | "tr"; cols?: number }) {
   const text = filtered ? "No transactions match these filters." : "No transactions yet.";
   return as === "li" ? (
     <li className="px-4 py-12 text-center text-sm text-slate-500">{text}</li>
   ) : (
     <tr>
-      <td colSpan={8} className="px-4 py-12 text-center text-sm text-slate-500">
+      <td colSpan={cols} className="px-4 py-12 text-center text-sm text-slate-500">
         {text}
       </td>
     </tr>

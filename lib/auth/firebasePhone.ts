@@ -106,8 +106,8 @@ function firebasePhoneMessage(code: string): string {
     case "auth/captcha-check-failed": return "The security check failed. Please try again.";
     case "auth/unauthorized-domain": return "Phone verification is not enabled for this website. Contact your administrator.";
     case "auth/quota-exceeded": return "SMS verification is temporarily unavailable. Contact your administrator.";
-    case "auth/billing-not-enabled": return "Firebase SMS billing is not enabled. Contact your administrator.";
-    case "auth/operation-not-allowed": return "Phone sign-in is disabled for this Firebase project. Contact your administrator.";
+    case "auth/billing-not-enabled": return "Firebase SMS billing is not enabled (the project needs the Blaze plan). Contact your administrator.";
+    case "auth/operation-not-allowed": return "Phone sign-in is disabled, or SMS to this country is blocked by the Firebase SMS region policy. Contact your administrator.";
     case "auth/invalid-app-credential":
     case "auth/missing-app-credential":
       return onLocalhost
