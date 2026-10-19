@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Field, Spinner, inputCls } from "@/components/auth/FormControls";
 import { Icon } from "@/components/icons";
+import { ModalForm } from "@/components/ui/ModalForm";
 import { ApiError, errorMessage } from "@/lib/auth/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { formatDateTime } from "@/lib/auth/types";
 import { money } from "@/lib/deposits/types";
 import {
+  COMMISSION_STATUS,
   PAYOUT_LABEL,
   currentMonth,
   levelLabel,
@@ -87,9 +89,13 @@ export function AdvisorCommissionDetail({
   backHref: string;
   onPay: (row: Pick<CommissionMonthRow, "advisor" | "available">, type: PayoutType) => void;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [data, setData] = useState<CommissionStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjusted, setAdjusted] = useState<string | null>(null);
+  const [controlling, setControlling] = useState(false);
+  const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>("sources");
   const [scope, setScope] = useState<string | null>(null); // null = all months, else "YYYY-MM"
   const [member, setMember] = useState<{ accountNo: string; name: string } | null>(null);
@@ -101,9 +107,10 @@ export function AdvisorCommissionDetail({
       (err) => { if ((err as Error).name !== "AbortError") setError(errorMessage(err)); },
     );
     return () => controller.abort();
-  }, [authFetch, accountNo]);
+  }, [authFetch, accountNo, version]);
 
-  const earnedTotal = data?.months.reduce((s, m) => s + Number(m.earned), 0) ?? 0;
+  // net of reversals and Super Admin adjustments, so earned − paid = balance
+  const earnedTotal = data?.months.reduce((s, m) => s + Number(m.earned) + Number(m.reversed) + Number(m.adjusted), 0) ?? 0;
   const paidTotal = data?.months.reduce((s, m) => s + Number(m.paid), 0) ?? 0;
   const openMember = (m: { accountNo: string; name: string }) => { setMember(m); setTab("sources"); };
   const openMonth = (m: string) => { setScope(m); setMember(null); setTab("history"); };
@@ -131,29 +138,40 @@ export function AdvisorCommissionDetail({
         </div>
 
         {error && <Alert tone="error">{error}</Alert>}
+        {adjusted && <Alert tone="success">{adjusted}</Alert>}
+        {data && (
+          <CommissionStateBar control={data.commission} canChange={user?.role === "SUPER_ADMIN"}
+            onChange={() => { setControlling(true); setAdjusted(null); }} />
+        )}
         {!data && !error && <div className="h-24 animate-pulse rounded-xl bg-slate-100" />}
 
         {data && (
-          <div className="grid gap-3 @2xl/panel:grid-cols-[1fr_auto]">
-            {/* earned − paid = balance, as an equation */}
-            <dl className="grid grid-cols-3 items-center gap-1 rounded-xl bg-slate-50 p-3 text-center">
-              <div>
-                <dt className="text-[11px] text-slate-500">Total earned</dt>
+          <div className="grid grid-cols-1 gap-3 @2xl/panel:grid-cols-[1fr_auto]">
+            {/* earned − paid = balance: three labelled rows when narrow, one equation line when wide */}
+            <dl className="grid grid-cols-1 gap-1.5 rounded-xl bg-slate-50 p-3 @md/panel:grid-cols-3 @md/panel:items-center @md/panel:gap-1 @md/panel:text-center">
+              <div className="flex items-baseline justify-between gap-3 @md/panel:block">
+                <dt className="text-[11px] text-slate-500">Total earned (net)</dt>
                 <dd className="text-base font-bold text-emerald-700 tabular-nums @lg/panel:text-lg">{money(String(earnedTotal))}</dd>
               </div>
-              <div className="relative">
-                <span className="absolute top-1/2 -left-1 -translate-y-1/2 text-slate-400">−</span>
-                <dt className="text-[11px] text-slate-500">Paid out</dt>
+              <div className="relative flex items-baseline justify-between gap-3 @md/panel:block">
+                <span className="absolute top-1/2 -left-1 hidden -translate-y-1/2 text-slate-400 @md/panel:inline">−</span>
+                <dt className="text-[11px] text-slate-500"><span className="@md/panel:hidden">− </span>Paid out</dt>
                 <dd className="text-base font-bold text-red-700 tabular-nums @lg/panel:text-lg">{money(String(paidTotal))}</dd>
               </div>
-              <div className="relative">
-                <span className="absolute top-1/2 -left-1 -translate-y-1/2 text-slate-400">=</span>
-                <dt className="text-[11px] text-slate-500">Balance</dt>
+              <div className="relative flex items-baseline justify-between gap-3 border-t border-slate-200 pt-1.5 @md/panel:block @md/panel:border-0 @md/panel:pt-0">
+                <span className="absolute top-1/2 -left-1 hidden -translate-y-1/2 text-slate-400 @md/panel:inline">=</span>
+                <dt className="text-[11px] font-medium text-slate-600"><span className="@md/panel:hidden">= </span>Balance</dt>
                 <dd className="text-base font-bold text-navy tabular-nums @lg/panel:text-lg">{money(data.available)}</dd>
               </div>
             </dl>
-            <div className="flex items-center justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <PayButtons row={data} onPay={(type) => onPay(data, type)} />
+              {user?.role === "SUPER_ADMIN" && (
+                <button type="button" onClick={() => { setAdjusting(true); setAdjusted(null); }}
+                  className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-medium text-navy hover:bg-slate-50">
+                  <Icon name="settings" className="size-4" /> Adjust wallet
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -193,11 +211,177 @@ export function AdvisorCommissionDetail({
               : <Sources advisorNo={accountNo} month={scope} onOpen={openMember} />)}
             {tab === "history" && <EarnedHistory advisorNo={accountNo} month={scope} onMember={openMember} />}
             {tab === "months" && <MonthlyStatement data={data} onMonth={openMonth} />}
-            {tab === "payouts" && <PayoutHistory accountNo={accountNo} embedded />}
+            {tab === "payouts" && <PayoutHistory key={version} accountNo={accountNo} embedded />}
           </div>
         </>
       )}
+
+      {controlling && data && (
+        <CommissionControlDialog advisor={data.advisor} active={data.commission.active}
+          onCancel={() => setControlling(false)}
+          onDone={(msg) => { setControlling(false); setAdjusted(msg); setVersion((v) => v + 1); }} />
+      )}
+      {adjusting && data && (
+        <AdjustDialog advisor={data.advisor} available={data.available}
+          onCancel={() => setAdjusting(false)}
+          onDone={(msg) => { setAdjusting(false); setAdjusted(msg); setVersion((v) => v + 1); }} />
+      )}
     </section>
+  );
+}
+
+/* ---- commission on / off (Super Admin may change it) ------------------------------ */
+function CommissionStateBar({ control, canChange, onChange }: { control: CommissionStatement["commission"]; canChange: boolean; onChange: () => void }) {
+  const since = control.changedAt ? `${control.active ? "Resumed" : "Stopped"} ${formatDateTime(control.changedAt)}${control.changedBy ? ` by ${control.changedBy}` : ""}` : null;
+  return (
+    <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm ${control.active ? "border-emerald-200 bg-emerald-50/60" : "border-amber-300 bg-amber-50"}`}>
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className={`mt-1.5 size-2.5 shrink-0 rounded-full ${control.active ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden />
+        <div className="min-w-0">
+          <p className={`font-semibold ${control.active ? "text-emerald-800" : "text-amber-900"}`}>
+            {control.active ? "Commission active" : "Commission stopped"}
+          </p>
+          <p className="text-xs text-slate-600">
+            {control.active
+              ? "Earns commission on every deposit of the members they referred, by the current rules."
+              : "New deposits of their referred members earn this advisor nothing. Commission already earned stays in the wallet and can still be paid."}
+          </p>
+          {(since || control.reason) && (
+            <p className="mt-0.5 text-[11px] text-slate-500">{since}{control.reason ? ` · “${control.reason}”` : ""}</p>
+          )}
+        </div>
+      </div>
+      {canChange && (
+        <button type="button" onClick={onChange}
+          className={`flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold ${control.active ? "border border-red-200 bg-white text-red-700 hover:bg-red-50" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}>
+          <Icon name={control.active ? "x" : "refresh"} className="size-4" /> {control.active ? "Stop commission" : "Resume commission"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---- Super Admin: stop / resume new commission ----------------------------------- */
+function CommissionControlDialog({ advisor, active, onDone, onCancel }: {
+  advisor: CommissionStatement["advisor"];
+  active: boolean; // true → this dialog stops it
+  onDone: (message: string) => void;
+  onCancel: () => void;
+}) {
+  const { authFetch } = useAuth();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await authFetch(`/api/deposits/advisor-commissions/${encodeURIComponent(advisor.accountNo)}/${active ? "stop" : "resume"}`, {
+        method: "POST", body: { reason: reason.trim() || undefined },
+      });
+      onDone(active
+        ? `Commission stopped for ${advisor.name}. Their earned balance is unchanged.`
+        : `Commission resumed for ${advisor.name}. New deposits earn commission again.`);
+    } catch (err) {
+      setError(errorMessage(err));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalForm title={active ? "Stop commission" : "Resume commission"} subtitle={`${advisor.accountNo} — ${advisor.name}`}
+      icon={active ? "x" : "refresh"} danger={active} saving={saving}
+      submitLabel={active ? "Stop commission" : "Resume commission"} onSubmit={submit} onCancel={onCancel}>
+      <ul className="space-y-1.5 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+        {active ? (
+          <>
+            <li>✗ From now on, deposits of the members this advisor referred <b>earn them no commission</b>.</li>
+            <li>✓ Commission already earned, the wallet balance and every payment stay <b>exactly as they are</b> — you can still pay it.</li>
+            <li>✓ Other advisors in the chain keep earning as usual. You can resume at any time.</li>
+          </>
+        ) : (
+          <>
+            <li>✓ New deposits earn this advisor commission again, by the <b>current</b> commission rules.</li>
+            <li>• Deposits made while it was stopped are <b>not</b> paid later.</li>
+          </>
+        )}
+      </ul>
+      <Field label="Reason (optional)" htmlFor="ctl-reason">
+        <input id="ctl-reason" value={reason} maxLength={200} disabled={saving} onChange={(e) => setReason(e.target.value)}
+          className={inputCls()} placeholder={active ? "e.g. Under review" : "e.g. Review completed"} />
+      </Field>
+      {error && <Alert tone="error">{error}</Alert>}
+    </ModalForm>
+  );
+}
+
+/* ---- Super Admin: ± adjustment of the commission wallet ------------------------- */
+function AdjustDialog({ advisor, available, onDone, onCancel }: {
+  advisor: CommissionStatement["advisor"];
+  available: string;
+  onDone: (message: string) => void;
+  onCancel: () => void;
+}) {
+  const { authFetch } = useAuth();
+  const [direction, setDirection] = useState<"CREDIT" | "DEBIT">("CREDIT");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [requestKey] = useState(() => crypto.randomUUID());
+  const value = Number(amount.replace(/,/g, ""));
+  const signed = direction === "CREDIT" ? value : -value;
+  const after = Number(available) + (Number.isFinite(signed) ? signed : 0);
+
+  const submit = async () => {
+    const found: Record<string, string> = {};
+    if (!/^\d{1,7}(\.\d{1,2})?$/.test(amount.replace(/,/g, "")) || value <= 0) found.amount = "Enter an amount greater than 0 (max 2 decimals)";
+    else if (after < 0) found.amount = `At most ${money(available)} can be taken off`;
+    if (reason.trim().length < 3) found.reason = "Give the reason (at least 3 characters)";
+    setErrors(found);
+    if (Object.keys(found).length) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await authFetch<{ balanceAfter: string }>(`/api/deposits/advisor-commissions/${encodeURIComponent(advisor.accountNo)}/adjustments`, {
+        method: "POST", body: { amount: signed.toFixed(2), reason: reason.trim(), requestKey },
+      });
+      onDone(`Wallet ${direction === "CREDIT" ? "credited" : "debited"} ${money(value.toFixed(2))}. Commission balance now ${money(r.balanceAfter)}.`);
+    } catch (err) {
+      if (err instanceof ApiError && Object.keys(err.details).length) setErrors(err.details);
+      setError(errorMessage(err));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalForm title="Adjust commission wallet" subtitle={`${advisor.accountNo} — ${advisor.name}`} icon="settings"
+      saving={saving} submitLabel={direction === "CREDIT" ? "Credit wallet" : "Debit wallet"} onSubmit={submit} onCancel={onCancel}>
+      <p className="text-sm text-slate-600">
+        For corrections only — e.g. a commission that was missed, or one credited by mistake. It is kept in the history with your
+        name and the reason, and it never touches the advisor&apos;s savings.
+      </p>
+      <div className="flex gap-2" role="radiogroup" aria-label="Direction">
+        {(["CREDIT", "DEBIT"] as const).map((d) => (
+          <button key={d} type="button" role="radio" aria-checked={direction === d} disabled={saving} onClick={() => setDirection(d)}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${direction === d ? (d === "CREDIT" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-red-400 bg-red-50 text-red-800") : "border-slate-200 text-slate-600"}`}>
+            {d === "CREDIT" ? "+ Add to wallet" : "− Take off wallet"}
+          </button>
+        ))}
+      </div>
+      <Field label="Amount (₹)" required htmlFor="adj-amount" error={errors.amount}
+        hint={value > 0 ? `Balance ${money(available)} → ${money(after.toFixed(2))}` : `Balance now ${money(available)}`}>
+        <input id="adj-amount" inputMode="decimal" value={amount} disabled={saving} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))}
+          className={inputCls(errors.amount)} placeholder="0.00" />
+      </Field>
+      <Field label="Reason" required htmlFor="adj-reason" error={errors.reason}>
+        <input id="adj-reason" value={reason} maxLength={200} disabled={saving} onChange={(e) => setReason(e.target.value)}
+          className={inputCls(errors.reason)} placeholder="e.g. Commission missed on DEP00000123" />
+      </Field>
+      {error && !Object.keys(errors).length && <Alert tone="error">{error}</Alert>}
+    </ModalForm>
   );
 }
 
@@ -342,22 +526,28 @@ function EarnedHistory({ advisorNo, month, source, onMember }: {
             <tr>
               <th className="px-3 py-2 font-medium">Date</th>
               {!source && <th className="px-3 py-2 font-medium">Member</th>}
-              <th className="px-3 py-2 font-medium">Level</th>
-              <th className="px-3 py-2 font-medium">Deposit</th>
-              <th className="px-3 py-2 text-right font-medium">Deposited</th>
-              <th className="px-3 py-2 text-right font-medium">Rate</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 font-medium">Level</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 font-medium">Deposit</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 text-right font-medium">Deposited</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 text-right font-medium">Rate</th>
               <th className="px-3 py-2 text-right font-medium">Commission</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {data.items.map((e) => (
               <tr key={e.id} className={e.type === "REVERSAL" ? "bg-amber-50/50" : ""}>
-                <td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">{formatDateTime(e.at)}</td>
+                <td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">
+                  {formatDateTime(e.at)}
+                  {/* narrow panel: the hidden columns in one line */}
+                  <span className="block text-[11px] text-slate-500 @lg/panel:hidden">
+                    L{e.level} · {money(e.deposit.amount)} deposit · {rateLabel(e.commissionType, e.rate)}
+                  </span>
+                </td>
                 {!source && <td className="px-3 py-2"><MemberName e={e} onMember={onMember} /></td>}
-                <td className="px-3 py-2"><LevelBadge level={e.level} small /></td>
-                <td className="px-3 py-2 font-mono text-xs text-slate-600">{e.deposit.receiptNo}<span className="ml-1 font-sans text-[11px] text-slate-400">{e.deposit.mode}</span></td>
-                <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{money(e.deposit.amount)}</td>
-                <td className="px-3 py-2 text-right text-xs text-slate-600">{rateLabel(e.commissionType, e.rate)}</td>
+                <td className="hidden @lg/panel:table-cell px-3 py-2"><LevelBadge level={e.level} small /></td>
+                <td className="hidden @lg/panel:table-cell px-3 py-2 font-mono text-xs text-slate-600">{e.deposit.receiptNo}<span className="ml-1 font-sans text-[11px] text-slate-400">{e.deposit.mode}</span></td>
+                <td className="hidden @lg/panel:table-cell px-3 py-2 text-right text-slate-700 tabular-nums">{money(e.deposit.amount)}</td>
+                <td className="hidden @lg/panel:table-cell px-3 py-2 text-right text-xs text-slate-600">{rateLabel(e.commissionType, e.rate)}</td>
                 <td className={`px-3 py-2 text-right font-semibold tabular-nums ${Number(e.amount) < 0 ? "text-amber-700" : "text-emerald-700"}`}>
                   {Number(e.amount) < 0 ? "" : "+"}{money(e.amount)}
                   {e.type === "REVERSAL" && <span className="block text-[10px] font-normal">reversed</span>}
@@ -386,32 +576,48 @@ function MonthlyStatement({ data, onMonth }: { data: CommissionStatement; onMont
   if (!data.months.length) return <Empty>No commission earned yet.</Empty>;
   return (
     <div className="space-y-2">
-      <p className="text-xs text-slate-600">Opening + earned − paid = closing. Select a month to see where its commission came from.</p>
+      <p className="text-xs text-slate-600">
+        Carried forward + earned − paid = outstanding; whatever is not paid carries into the next month automatically.
+        Select a month to see where its commission came from.
+      </p>
       <div className="max-h-96 overflow-auto rounded-lg border border-slate-200">
-        <table className="w-full min-w-[34rem] text-left text-sm">
+        <table className="w-full text-left text-sm @lg/panel:min-w-[34rem]">
           <thead className="sticky top-0 bg-slate-50 text-xs text-slate-600">
             <tr>
               <th className="px-3 py-2 font-medium">Month</th>
-              <th className="px-3 py-2 text-right font-medium">Opening</th>
-              <th className="px-3 py-2 text-right font-medium">Earned</th>
-              <th className="px-3 py-2 text-right font-medium">Paid</th>
-              <th className="px-3 py-2 text-right font-medium">Closing</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 text-right font-medium">Carried forward</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 text-right font-medium">Earned</th>
+              <th className="hidden @lg/panel:table-cell px-3 py-2 text-right font-medium">Paid</th>
+              <th className="px-3 py-2 text-right font-medium">Outstanding</th>
+              <th className="px-3 py-2 font-medium">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {data.months.map((m) => (
               <tr key={m.month} onClick={() => onMonth(m.month)} className="cursor-pointer hover:bg-slate-50">
-                <td className="px-3 py-2 font-medium text-brand underline-offset-2 hover:underline">{monthLabel(m.month)}</td>
-                <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{money(m.opening)}</td>
-                <td className="px-3 py-2 text-right text-emerald-700 tabular-nums">
+                <td className="px-3 py-2">
+                  <span className="font-medium text-brand underline-offset-2 hover:underline">{monthLabel(m.month)}</span>
+                  <span className="block text-[11px] text-slate-500 tabular-nums @lg/panel:hidden">
+                    <span className="text-emerald-700">+{money(m.earned)}</span> · <span className="text-red-700">−{money(m.paid)}</span>
+                  </span>
+                </td>
+                <td className="hidden @lg/panel:table-cell px-3 py-2 text-right text-slate-700 tabular-nums">{money(m.opening)}</td>
+                <td className="hidden @lg/panel:table-cell px-3 py-2 text-right text-emerald-700 tabular-nums">
                   +{money(m.earned)}
                   {m.earnedCount > 0 && <span className="block text-[10px] text-slate-400">{m.earnedCount} deposits</span>}
+                  {Number(m.reversed) !== 0 && <span className="block text-[10px] text-red-600">reversed {money(m.reversed)}</span>}
+                  {Number(m.adjusted) !== 0 && <span className="block text-[10px] text-blue-700">adjusted {money(m.adjusted)}</span>}
                 </td>
-                <td className="px-3 py-2 text-right text-red-700 tabular-nums">
+                <td className="hidden @lg/panel:table-cell px-3 py-2 text-right text-red-700 tabular-nums">
                   −{money(m.paid)}
                   {m.payoutCount > 0 && <span className="block text-[10px] text-slate-400">{m.payoutCount} payout{m.payoutCount > 1 ? "s" : ""}</span>}
                 </td>
                 <td className="px-3 py-2 text-right font-semibold text-navy tabular-nums">{money(m.closing)}</td>
+                <td className="px-3 py-2">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ring-1 ${COMMISSION_STATUS[m.status].className}`}>
+                    {COMMISSION_STATUS[m.status].label}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -493,7 +699,7 @@ export function PayoutHistory({ accountNo, month, embedded }: { accountNo?: stri
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-navy">{title}</h3>
         {data && data.total > 0 && (
-          <span className="text-xs text-slate-500">{data.total} payout{data.total > 1 ? "s" : ""} · {money(data.totalAmount)}</span>
+          <span className="text-xs text-slate-500">{data.total} entr{data.total > 1 ? "ies" : "y"} · paid out {money(data.totalAmount)}</span>
         )}
       </div>
       {error && <Alert tone="error">{error}</Alert>}
@@ -507,20 +713,27 @@ export function PayoutHistory({ accountNo, month, embedded }: { accountNo?: stri
             <li key={p.receiptNo} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 px-3 py-2.5">
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-1.5 text-sm">
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${p.type === "PAYMENT" ? "bg-brand-soft text-brand" : "bg-amber-100 text-amber-800"}`}>
-                    {p.type === "PAYMENT" ? "PAID" : "WITHDRAWN"}
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    p.type === "PAYMENT" ? "bg-brand-soft text-brand" : p.type === "WITHDRAWAL" ? "bg-amber-100 text-amber-800" : "bg-blue-50 text-blue-700"}`}>
+                    {p.type === "PAYMENT" ? "PAID" : p.type === "WITHDRAWAL" ? "WITHDRAWN" : "ADJUSTED"}
                   </span>
                   {!accountNo && <span className="font-medium text-navy">{p.advisor.name}</span>}
                   <span className="font-mono text-xs text-slate-500">{p.receiptNo}</span>
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  {formatDateTime(p.paidAt)} · {p.mode} · by {p.paidBy} · {monthLabel(p.month)}
+                  {formatDateTime(p.paidAt)}{p.mode ? ` · ${p.mode}` : ""} · by {p.paidBy} · {monthLabel(p.month)}
                   {p.referenceNo && ` · ref ${p.referenceNo}`}
                 </p>
                 {p.remarks && <p className="text-[11px] text-slate-600">{p.remarks}</p>}
               </div>
               <div className="text-right">
-                <p className="font-semibold text-red-700 tabular-nums">−{money(p.amount)}</p>
+                {p.type === "ADJUSTMENT" ? (
+                  <p className={`font-semibold tabular-nums ${Number(p.amount) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {Number(p.amount) >= 0 ? "+" : "−"}{money(String(Math.abs(Number(p.amount))))}
+                  </p>
+                ) : (
+                  <p className="font-semibold text-red-700 tabular-nums">−{money(p.amount)}</p>
+                )}
                 {p.balanceAfter !== null && <p className="text-[11px] text-slate-500 tabular-nums">balance {money(p.balanceAfter)}</p>}
               </div>
             </li>
@@ -563,6 +776,8 @@ export function PayoutDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // one key per dialog: a double-click or a retry after a timeout pays only once (the server returns the first payout)
+  const [requestKey] = useState(() => crypto.randomUUID());
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -590,7 +805,7 @@ export function PayoutDialog({
     try {
       const r = await authFetch<CommissionPayout>(`/api/deposits/advisor-commissions/${encodeURIComponent(advisor.accountNo)}/payouts`, {
         method: "POST",
-        body: { type, amount: value.toFixed(2), mode: "CASH", referenceNo: referenceNo.trim() || undefined, remarks: remarks.trim() || undefined },
+        body: { type, amount: value.toFixed(2), mode: "CASH", referenceNo: referenceNo.trim() || undefined, remarks: remarks.trim() || undefined, requestKey },
       });
       onDone(r);
     } catch (err) {

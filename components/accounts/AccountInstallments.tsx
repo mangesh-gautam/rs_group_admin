@@ -61,13 +61,13 @@ export function AccountInstallments({ accountNo, totalInterest }: { accountNo: s
           </dl>
           {/* daily accounts have one row per day — keep the list scrollable */}
           <div className="max-h-[28rem] overflow-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full text-left text-sm sm:min-w-[640px]">
               <thead className="sticky top-0 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="px-4 py-3 font-medium">No.</th>
+                  <th className="hidden sm:table-cell px-4 py-3 font-medium">No.</th>
                   <th className="px-4 py-3 font-medium">Due On</th>
-                  <th className="px-4 py-3 font-medium">Pay By (buffer)</th>
-                  <th className="px-4 py-3 font-medium">Paid On</th>
+                  <th className="hidden sm:table-cell px-4 py-3 font-medium">Pay By (buffer)</th>
+                  <th className="hidden sm:table-cell px-4 py-3 font-medium">Paid On</th>
                   <th className="px-4 py-3 text-right font-medium">Paid</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
@@ -84,10 +84,13 @@ export function AccountInstallments({ accountNo, totalInterest }: { accountNo: s
                     </tr>
                   )}
                   <tr>
-                    <td className="px-4 py-3 text-slate-700">{i.installmentNo}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-navy">{formatDate(i.dueOn)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">{formatDate(i.bufferEndsOn)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">{i.paidOn ? formatDate(i.paidOn) : "—"}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-slate-700">{i.installmentNo}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-navy">
+                      {formatDate(i.dueOn)}
+                      <span className="block text-[11px] text-slate-500 sm:hidden">#{i.installmentNo} · pay by {formatDate(i.bufferEndsOn)}</span>
+                    </td>
+                    <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-slate-600">{formatDate(i.bufferEndsOn)}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-slate-600">{i.paidOn ? formatDate(i.paidOn) : "—"}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap text-navy">
                       {Number(i.amountPaid) > 0 ? money(i.amountPaid) : "—"}
                     </td>

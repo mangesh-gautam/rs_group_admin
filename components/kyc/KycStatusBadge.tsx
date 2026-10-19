@@ -18,8 +18,11 @@ export function KycStatusBadge({ status, className = "" }: { status: KycStatus; 
 }
 
 /** "Verified" / "Uploaded" / "Missing" for one document. */
-export function KycDocState({ number, verified }: { number: string | null; verified: boolean }) {
+/** One document's state: verified, number + copy waiting for review, or what is still missing. */
+export function KycDocState({ number, copy, verified }: { number: string | null; copy: boolean; verified: boolean }) {
   if (verified) return <span className="text-xs font-medium text-emerald-700">✓ Verified</span>;
-  if (number) return <span className="text-xs font-medium text-brand">Uploaded · to review</span>;
+  if (number && copy) return <span className="text-xs font-medium text-brand">Uploaded · to review</span>;
+  if (number) return <span className="text-xs font-medium text-amber-700">Number only · copy missing</span>;
+  if (copy) return <span className="text-xs font-medium text-amber-700">Copy only · number missing</span>;
   return <span className="text-xs text-slate-400">Missing</span>;
 }

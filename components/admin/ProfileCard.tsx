@@ -62,7 +62,7 @@ export function ProfileCard() {
             </p>
           </div>
         </div>
-        <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+        <dl className="mt-5 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
           {rows.map(([label, value]) => (
             <div key={label}>
               <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</dt>

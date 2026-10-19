@@ -61,7 +61,7 @@ export function EditTransactionDialog({ entry, onDone, onCancel }: { entry: Stat
           onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))} className={inputCls(errors.amount)} />
       </Field>
       {!interest && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Mode" required htmlFor="corr-mode" error={errors.mode}>
             <select id="corr-mode" value={mode} disabled={saving} onChange={(e) => setMode(e.target.value as typeof mode)} className={inputCls(errors.mode)}>
               {DEPOSIT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}

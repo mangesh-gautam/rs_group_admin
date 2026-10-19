@@ -123,12 +123,12 @@ export function AdminDetail({ id }: { id: string }) {
 
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="mb-4 flex items-center gap-2 font-semibold text-navy">
             <Icon name="idCard" className="size-5 text-brand" /> Admin Details
           </h2>
-          <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             {details.map(([label, value]) => (
               <div key={label}>
                 <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</dt>

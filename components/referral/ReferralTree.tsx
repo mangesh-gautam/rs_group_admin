@@ -153,12 +153,15 @@ export function ReferralTree({ root, basePath }: { root: string | null; basePath
             {total === 0 ? (
               <p className="py-8 text-center text-sm text-slate-500">No members in this network yet.</p>
             ) : (
-              <ul className="@container/tree space-y-1">
-                {tree.roots.map((n) => (
-                  <Branch key={n.id} node={n} tree={tree} isOpen={isOpen} matches={matches} hasQuery={!!q}
-                    onToggle={(id, open) => setToggled((t) => ({ ...t, [id]: open }))} onFocus={go} />
-                ))}
-              </ul>
+              // deep branches keep a readable row width and the tree scrolls sideways in its card
+              <div className="overflow-x-auto pb-1">
+                <ul className="@container/tree space-y-1">
+                  {tree.roots.map((n) => (
+                    <Branch key={n.id} node={n} tree={tree} isOpen={isOpen} matches={matches} hasQuery={!!q}
+                      onToggle={(id, open) => setToggled((t) => ({ ...t, [id]: open }))} onFocus={go} />
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </>
@@ -216,12 +219,14 @@ export function NetworkTree({ root, treePath }: { root: string; treePath: string
   if (!nodes) return <div className="h-40 animate-pulse rounded-xl bg-slate-100" />;
   return (
     <div>
-      <ul className="@container/tree space-y-1">
-        {tree.roots.map((n) => (
-          <Branch key={n.id} node={n} tree={tree} isOpen={(x) => toggled[x.id] ?? x.depth < 6} matches={new Set()} hasQuery={false}
-            onToggle={(id, open) => setToggled((t) => ({ ...t, [id]: open }))} onFocus={(no) => router.push(`${treePath}?root=${no}`)} />
-        ))}
-      </ul>
+      <div className="overflow-x-auto pb-1">
+        <ul className="@container/tree space-y-1">
+          {tree.roots.map((n) => (
+            <Branch key={n.id} node={n} tree={tree} isOpen={(x) => toggled[x.id] ?? x.depth < 6} matches={new Set()} hasQuery={false}
+              onToggle={(id, open) => setToggled((t) => ({ ...t, [id]: open }))} onFocus={(no) => router.push(`${treePath}?root=${no}`)} />
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -242,9 +247,9 @@ function Branch({ node, tree, isOpen, matches, hasQuery, onToggle, onFocus }: {
   const hit = matches.has(node.id);
 
   return (
-    <li className={node.depth === 0 ? "" : "relative pl-4 before:absolute before:top-0 before:left-0 before:h-full before:border-l before:border-slate-300 after:absolute after:top-6 after:left-0 after:w-3 after:border-t after:border-slate-300 last:before:h-6 @lg/tree:pl-7 @lg/tree:after:w-6"}>
+    <li className={node.depth === 0 ? "" : "relative pl-3 before:absolute before:top-0 before:left-0 before:h-full before:border-l before:border-slate-300 after:absolute after:top-6 after:left-0 after:w-2.5 after:border-t after:border-slate-300 last:before:h-6 @lg/tree:pl-7 @lg/tree:after:w-6"}>
       {/* the row adapts to its own width: figures beside the name when wide, under it when narrow */}
-      <div style={{ animationDelay: `${Math.min(node.depth, 6) * 40}ms` }} className={`referral-node-enter @container/row rounded-xl border px-2 py-2 @lg/tree:px-2.5 ${hit ? "border-amber-300 bg-amber-50" : hasQuery ? "border-transparent opacity-60" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}>
+      <div style={{ animationDelay: `${Math.min(node.depth, 6) * 40}ms` }} className={`referral-node-enter @container/row min-w-[14rem] rounded-xl border px-2 py-2 @lg/tree:px-2.5 ${hit ? "border-amber-300 bg-amber-50" : hasQuery ? "border-transparent opacity-60" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}>
         <div className="flex items-center gap-2">
           {kids.length > 0 ? (
             <button type="button" onClick={() => onToggle(node.id, !open)} aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} ${node.name}`}
@@ -300,7 +305,7 @@ function Branch({ node, tree, isOpen, matches, hasQuery, onToggle, onFocus }: {
       </div>
 
       {open && kids.length > 0 && (
-        <ul className="mt-1 ml-[11px] space-y-1">
+        <ul className="mt-1 ml-2 space-y-1 @lg/tree:ml-[11px]">
           {kids.map((c) => (
             <Branch key={c.id} node={c} tree={tree} isOpen={isOpen} matches={matches} hasQuery={hasQuery} onToggle={onToggle} onFocus={onFocus} />
           ))}

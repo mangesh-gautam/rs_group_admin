@@ -1,5 +1,6 @@
 "use client";
 
+import { HolderPhoto } from "@/components/accounts/HolderPhoto";
 import { Skeleton, SkeletonRegion, CardsSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -35,7 +36,7 @@ export function DepositsScreen({ initialAccountNo }: { initialAccountNo: string 
   const [focusAccount, setFocusAccount] = useState<string | null>(null);
 
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       <DepositDesk
         initialAccountNo={initialAccountNo}
         onAccount={setFocusAccount}
@@ -211,12 +212,7 @@ function DepositDesk({
 
       {account && (
         <div className="flex gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the API */}
-          <img
-            src={account.photo}
-            alt={`Photograph of ${account.name}`}
-            className="aspect-[35/45] w-16 shrink-0 rounded border border-slate-200 bg-white object-cover"
-          />
+          <HolderPhoto src={account.photo} name={account.name} className="aspect-[35/45] w-16 rounded bg-white" />
           <div className="min-w-0 flex-1 text-sm">
             <Link href={`/admin/accounts/${account.accountNo}`} className="font-semibold text-navy hover:underline">
               {account.name}
@@ -288,7 +284,7 @@ function DepositDesk({
       {/* Step 2 — amount */}
       {account && (
         <form onSubmit={submit} noValidate className="space-y-4 border-t border-slate-100 pt-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label required>Amount (₹)</Label>
               <input
@@ -447,12 +443,12 @@ function DepositHistory({ version, accountNo }: { version: number; accountNo: st
         </div>
       ) : (
         <div className={`overflow-x-auto ${loading && data ? "opacity-60" : ""}`}>
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full text-left text-sm sm:min-w-[640px]">
             <thead className="bg-slate-50 text-xs text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Receipt / Date</th>
                 <th className="px-4 py-3 font-medium">Account</th>
-                <th className="px-4 py-3 font-medium">Mode</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell">Mode</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
               </tr>
             </thead>
@@ -472,6 +468,11 @@ function DepositHistory({ version, accountNo }: { version: number; accountNo: st
                     <p className="text-xs text-slate-500">
                       {formatDateTime(d.depositedAt)} · {d.createdBy}
                     </p>
+                    {/* phones: the Mode column is hidden — its value goes here */}
+                    <p className="text-[11px] text-slate-500 sm:hidden">
+                      {d.kind === "OPENING" ? "Opening" : d.kind === "INTEREST" ? "Interest" : modeLabel(d.mode)}
+                      {d.referenceNo ? ` · ${d.referenceNo}` : ""}
+                    </p>
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/admin/accounts/${d.accountNo}`} className="font-medium text-navy hover:underline">
@@ -479,7 +480,7 @@ function DepositHistory({ version, accountNo }: { version: number; accountNo: st
                     </Link>
                     <p className="font-mono text-xs text-slate-500">{d.accountNo}</p>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-700">
+                  <td className="hidden px-4 py-3 text-xs text-slate-700 sm:table-cell">
                     {d.kind === "OPENING" ? (
                       <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand ring-1 ring-brand/20">
                         Opening

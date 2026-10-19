@@ -8,6 +8,7 @@ import { errorMessage } from "@/lib/auth/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { money } from "@/lib/deposits/types";
 import {
+  COMMISSION_STATUS,
   PAYOUT_LABEL,
   currentMonth,
   monthLabel,
@@ -16,6 +17,7 @@ import {
   type CommissionMonthRow,
   type CommissionOverview,
   type CommissionPayout,
+  type CommissionStatus,
   type PayoutType,
 } from "@/lib/referral/types";
 import { PayButtons, PayoutDialog, PayoutHistory } from "./AdvisorCommissionDetail";
@@ -35,6 +37,8 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
   const [query, setQuery] = useState("");
   const [q, setQ] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
+  const [status, setStatus] = useState<Exclude<CommissionStatus, "NONE"> | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CommissionOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,12 +55,43 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
     const controller = new AbortController();
     const params = new URLSearchParams({ month, page: String(page), pageSize: String(PAGE_SIZE), active: String(onlyActive) });
     if (q) params.set("q", q);
+    if (status) params.set("status", status);
     authFetch<CommissionOverview>(`/api/deposits/advisor-commissions?${params}`, { signal: controller.signal }).then(
       (d) => { setData(d); setError(null); },
       (err) => { if ((err as Error).name !== "AbortError") setError(errorMessage(err)); },
     );
     return () => controller.abort();
-  }, [authFetch, month, q, onlyActive, page, version]);
+  }, [authFetch, month, q, onlyActive, status, page, version]);
+
+  /** The month's report as CSV (every advisor shown by the current filters). */
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const rows: CommissionMonthRow[] = [];
+      for (let p = 1; ; p++) {
+        const params = new URLSearchParams({ month, page: String(p), pageSize: "100", active: String(onlyActive) });
+        if (q) params.set("q", q);
+        if (status) params.set("status", status);
+        const d = await authFetch<CommissionOverview>(`/api/deposits/advisor-commissions?${params}`);
+        rows.push(...d.items);
+        if (p * 100 >= d.total) break;
+      }
+      const cell = (v: string | number) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+      const lines = [
+        ["Advisor", "Account no.", "Office", "Carried forward", "Earned", "Reversed", "Adjusted", "Paid", "Outstanding", "Status", "Payable now"],
+        ...rows.map((r) => [r.advisor.name, r.advisor.accountNo, r.advisor.office.name, r.opening, r.earned, r.reversed, r.adjusted,
+          r.paid, r.closing, COMMISSION_STATUS[r.status].label, r.available]),
+      ].map((l) => l.map(cell).join(","));
+      const url = URL.createObjectURL(new Blob([`\uFEFF${lines.join("\r\n")}\r\n`], { type: "text/csv;charset=utf-8" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `advisor-commission-${month}.csv` });
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   /** The advisor's own page; the month travels along so "back" returns to it. */
   const open = (accountNo: string) => router.push(`${basePath}/${accountNo}?month=${month}`);
@@ -110,16 +145,30 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
             className="size-4 accent-[var(--color-brand)]" />
           Include settled advisors
         </label>
+        <button type="button" onClick={exportCsv} disabled={exporting || !data?.total}
+          className="ml-auto flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-navy hover:bg-slate-50 disabled:opacity-50">
+          <Icon name="download" className="size-4" /> {exporting ? "Preparing…" : `Export ${monthLabel(month)} (CSV)`}
+        </button>
       </div>
 
       {t && (
         <dl className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <Stat label={`Opening · ${monthLabel(data.month)}`} value={money(t.opening)} />
-          <Stat label="Earned in month" value={money(t.earned)} tone="green" />
-          <Stat label="Paid in month" value={money(t.paid)} tone="red" />
-          <Stat label="Closing" value={money(t.closing)} hint={isCurrent ? "so far" : undefined} />
-          <Stat label="Payable now" value={money(t.available)} tone="brand" />
+          <Stat label="Carried forward (unpaid)" value={money(t.opening)} hint={`from before ${monthLabel(data.month)}`} />
+          <Stat label={`Earned in ${monthLabel(data.month)}`} value={money(t.earned)} tone="green"
+            hint={Number(t.reversed) || Number(t.adjusted) ? `reversed ${money(t.reversed)} · adjusted ${money(t.adjusted)}` : undefined} />
+          <Stat label={`Paid in ${monthLabel(data.month)}`} value={money(t.paid)} tone="red" />
+          <Stat label="Outstanding at month end" value={money(t.closing)} hint={isCurrent ? "so far" : undefined} />
+          <Stat label="Payable now (all months)" value={money(t.available)} tone="brand" />
         </dl>
+      )}
+
+      {data && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by payment status">
+          <StatusChip active={status === null} onClick={() => { setStatus(null); setPage(1); }} label="All advisors" />
+          <StatusChip active={status === "PENDING"} onClick={() => { setStatus("PENDING"); setPage(1); }} label="Pending" count={data.counts.pending} tone="PENDING" />
+          <StatusChip active={status === "PARTIAL"} onClick={() => { setStatus("PARTIAL"); setPage(1); }} label="Partially paid" count={data.counts.partial} tone="PARTIAL" />
+          <StatusChip active={status === "PAID"} onClick={() => { setStatus("PAID"); setPage(1); }} label="Fully paid" count={data.counts.paid} tone="PAID" />
+        </div>
       )}
 
       {error && <Alert tone="error">{error}</Alert>}
@@ -129,7 +178,7 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
         {!data && !error && <div className="m-4 h-64 animate-pulse rounded-xl bg-slate-100" />}
         {data && data.items.length === 0 && (
           <p className="px-4 py-10 text-center text-sm text-slate-500">
-            {q ? "No advisor matches this search." : `No commission activity in ${monthLabel(data.month)}, and nothing is due.`}
+            {q || status ? "No advisor matches these filters." : `No commission activity in ${monthLabel(data.month)}, and nothing is due.`}
           </p>
         )}
         {data && data.items.length > 0 && (
@@ -141,7 +190,7 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
                   <button type="button" onClick={() => open(r.advisor.accountNo)} className="block w-full text-left">
                     <span className="flex items-start justify-between gap-3">
                       <span className="min-w-0">
-                        <span className="block font-medium text-navy">{r.advisor.name}</span>
+                        <span className="block font-medium text-navy">{r.advisor.name} {!r.commissionActive && <StoppedBadge />}</span>
                         <span className="block truncate font-mono text-[11px] text-slate-500">{r.advisor.accountNo}</span>
                       </span>
                       <span className="shrink-0 text-right">
@@ -149,6 +198,7 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
                         <span className="block text-[10px] text-slate-500 uppercase">payable</span>
                       </span>
                     </span>
+                    <StatusBadge status={r.status} />
                     <span className="mt-1.5 grid grid-cols-4 gap-1 text-[11px] text-slate-500">
                       <Cell label="Opening" value={r.opening} />
                       <Cell label="Earned" value={r.earned} tone="green" />
@@ -166,10 +216,11 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
                 <thead className="bg-slate-50 text-xs text-slate-600">
                   <tr>
                     <th className="px-4 py-2.5 font-medium">Advisor</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Opening</th>
+                    <th className="px-3 py-2.5 text-right font-medium">Carried forward</th>
                     <th className="px-3 py-2.5 text-right font-medium">Earned</th>
                     <th className="px-3 py-2.5 text-right font-medium">Paid</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Closing</th>
+                    <th className="px-3 py-2.5 text-right font-medium">Outstanding</th>
+                    <th className="px-3 py-2.5 font-medium">Status</th>
                     <th className="px-3 py-2.5 text-right font-medium">Payable now</th>
                     <th className="px-4 py-2.5 text-right font-medium"><span className="sr-only">Actions</span></th>
                   </tr>
@@ -179,7 +230,7 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
                     <tr key={r.advisor.accountNo} onClick={() => open(r.advisor.accountNo)} className="cursor-pointer hover:bg-brand-soft/50">
                       <td className="px-4 py-2.5">
                         <button type="button" onClick={() => open(r.advisor.accountNo)} className="text-left">
-                          <span className="block font-medium text-navy hover:text-brand hover:underline">{r.advisor.name}</span>
+                          <span className="block font-medium text-navy hover:text-brand hover:underline">{r.advisor.name} {!r.commissionActive && <StoppedBadge />}</span>
                           <span className="block font-mono text-[11px] text-slate-500">{r.advisor.accountNo} · {r.advisor.office.name}</span>
                         </button>
                       </td>
@@ -187,9 +238,12 @@ export function AdvisorCommissionScreen({ initialMonth, basePath }: { initialMon
                       <td className="px-3 py-2.5 text-right text-emerald-700 tabular-nums">
                         {money(r.earned)}
                         {r.earnedCount > 0 && <span className="block text-[10px] text-slate-400">from {r.earnedCount} deposits</span>}
+                        {Number(r.reversed) !== 0 && <span className="block text-[10px] text-red-600">reversed {money(r.reversed)}</span>}
+                        {Number(r.adjusted) !== 0 && <span className="block text-[10px] text-blue-700">adjusted {money(r.adjusted)}</span>}
                       </td>
                       <td className="px-3 py-2.5 text-right text-red-700 tabular-nums">{money(r.paid)}</td>
                       <td className="px-3 py-2.5 text-right font-medium text-navy tabular-nums">{money(r.closing)}</td>
+                      <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
                       <td className="px-3 py-2.5 text-right font-bold text-navy tabular-nums">{money(r.available)}</td>
                       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}><PayButtons row={r} onPay={(type) => setPayout({ row: r, type })} /></td>
                     </tr>
@@ -232,6 +286,22 @@ function Stat({ label, value, hint, tone }: { label: string; value: string; hint
   );
 }
 
+function StatusBadge({ status }: { status: CommissionStatus }) {
+  const s = COMMISSION_STATUS[status];
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ring-1 ${s.className}`}>{s.label}</span>;
+}
+
+function StatusChip({ active, onClick, label, count, tone }: { active: boolean; onClick: () => void; label: string; count?: number; tone?: CommissionStatus }) {
+  return (
+    <button type="button" aria-pressed={active} onClick={onClick}
+      className={`flex h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium ${active ? "border-navy bg-navy text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+      {tone && <span className={`size-2 rounded-full ${{ PENDING: "bg-amber-500", PARTIAL: "bg-blue-500", PAID: "bg-emerald-500", NONE: "bg-slate-400" }[tone]}`} />}
+      {label}
+      {count !== undefined && <span className={`rounded-full px-1.5 tabular-nums ${active ? "bg-white/20" : "bg-slate-100"}`}>{count}</span>}
+    </button>
+  );
+}
+
 function Cell({ label, value, tone }: { label: string; value: string; tone?: "green" | "red" }) {
   return (
     <span className="min-w-0">
@@ -265,8 +335,8 @@ function CommissionFlow() {
         ? levels.map((l) => `${l.level === 1 ? "Direct sponsor" : `L${l.level}`} ${rateLabel(l.type, l.value)}`).join(" · ")
         : "Up to 5 sponsors above the member, each at their level's rate.",
     },
-    { icon: "calendar" as const, title: "Balance builds monthly", text: "Opening + earned − paid = closing, every month. Kept apart from savings." },
-    { icon: "wallet" as const, title: "Paid out in cash", text: "Pay or withdraw up to the balance. Each payout gets a CMP receipt." },
+    { icon: "calendar" as const, title: "Unpaid carries forward", text: "Carried forward + earned − paid = outstanding, every month, automatically. Never mixed with savings, never earns interest." },
+    { icon: "wallet" as const, title: "Paid out in cash", text: "Pay in full or in part, up to the balance. Each payout gets a CMP receipt; a double-click never pays twice." },
   ];
 
   return (
@@ -277,7 +347,7 @@ function CommissionFlow() {
         <Icon name="chevronDown" className={`size-4 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <ol className="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="grid grid-cols-1 gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((st, i) => (
             <li key={st.title} className="relative flex gap-3 rounded-xl bg-slate-50 p-3">
               <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-brand">
@@ -295,5 +365,15 @@ function CommissionFlow() {
         </ol>
       )}
     </section>
+  );
+}
+
+/** The Super Admin stopped this advisor's new commission. */
+function StoppedBadge() {
+  return (
+    <span title="Commission stopped by the Super Admin — new deposits earn this advisor nothing"
+      className="ml-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 align-middle text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200">
+      Commission stopped
+    </span>
   );
 }

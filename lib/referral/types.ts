@@ -61,9 +61,23 @@ export const commissionFor = (l: Pick<CommissionLevel, "type" | "value" | "activ
 
 export type PayoutType = "PAYMENT" | "WITHDRAWAL"; // admin pays | advisor withdraws
 
-export const PAYOUT_LABEL: Record<PayoutType, string> = { PAYMENT: "Commission payment", WITHDRAWAL: "Commission withdrawal" };
+export const PAYOUT_LABEL: Record<PayoutType | "ADJUSTMENT", string> = {
+  PAYMENT: "Commission payment",
+  WITHDRAWAL: "Commission withdrawal",
+  ADJUSTMENT: "Commission adjustment",
+};
 
 type AdvisorRef = { accountNo: string; name: string; mobile: string | null; office: { name: string; city: string | null } };
+
+/** One advisor in one month: NONE (nothing payable) · PENDING · PARTIAL (partly paid) · PAID (in full). */
+export type CommissionStatus = "NONE" | "PENDING" | "PARTIAL" | "PAID";
+
+export const COMMISSION_STATUS: Record<CommissionStatus, { label: string; className: string }> = {
+  NONE: { label: "Nothing due", className: "bg-slate-50 text-slate-500 ring-slate-200" },
+  PENDING: { label: "Pending", className: "bg-amber-50 text-amber-800 ring-amber-200" },
+  PARTIAL: { label: "Partially paid", className: "bg-blue-50 text-blue-700 ring-blue-200" },
+  PAID: { label: "Paid", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+};
 
 /** Row of GET /advisor-commissions?month=YYYY-MM — one advisor in one month. */
 export type CommissionMonthRow = {
@@ -71,11 +85,15 @@ export type CommissionMonthRow = {
   opening: string; // closing of the previous month
   earned: string;
   earnedCount: number;
+  reversed: string; // ≤ 0: commission taken back (deposit corrected)
+  adjusted: string; // ± Super Admin adjustments
   paid: string;
   closing: string;
+  status: CommissionStatus;
   available: string; // balance now (all months)
   earnedTotal: string;
   paidTotal: string;
+  commissionActive: boolean; // false: the Super Admin stopped new commission
 };
 
 export type CommissionOverview = {
@@ -83,25 +101,34 @@ export type CommissionOverview = {
   pageSize: number;
   total: number;
   month: string;
-  totals: { opening: string; earned: string; paid: string; closing: string; available: string };
+  totals: { opening: string; earned: string; reversed: string; adjusted: string; paid: string; closing: string; available: string };
+  counts: { pending: number; partial: number; paid: number }; // advisors by status in the month
   items: CommissionMonthRow[];
 };
 
 /** GET /advisor-commissions/:accountNo — newest month first. */
+/** Super Admin stop / resume of an advisor's NEW commission (earned commission is never touched). */
+export type CommissionControl = { active: boolean; changedAt: string | null; changedBy: string | null; reason?: string | null };
+
 export type CommissionStatement = {
   advisor: AdvisorRef;
   available: string;
-  months: { month: string; opening: string; earned: string; paid: string; closing: string; earnedCount: number; payoutCount: number }[];
+  commission: CommissionControl;
+  months: {
+    month: string; opening: string; earned: string; reversed: string; adjusted: string; paid: string; closing: string;
+    status: CommissionStatus; earnedCount: number; payoutCount: number;
+  }[];
 };
 
 /** Row of GET /advisor-commissions/payouts and the result of POST …/:accountNo/payouts. */
 export type CommissionPayout = {
   receiptNo: string;
   advisor: { accountNo: string; name: string };
-  type: PayoutType;
+  type: PayoutType | "ADJUSTMENT"; // ADJUSTMENT: Super Admin ± correction (history only)
+  replayed?: boolean; // POST answer: this request was already paid — nothing paid again
   month: string;
   amount: string;
-  mode: string;
+  mode: string | null;
   referenceNo: string | null;
   remarks: string | null;
   balanceBefore: string | null;

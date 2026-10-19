@@ -42,7 +42,7 @@ export type DepositAccount = {
   mobileNumber: string;
   city: string;
   office: { name: string; city: string };
-  photo: string; // data URL
+  photo: string | null; // data URL; null = no photo (optional at opening)
   balance: string;
   totalDeposited: string;
   depositCount: number;

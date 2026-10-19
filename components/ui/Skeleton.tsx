@@ -37,7 +37,7 @@ export function TableSkeleton({ rows = 5, columns = 6 }: { rows?: number; column
 export function FormSkeleton({ fields = 8 }: { fields?: number }) {
   return <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
     <Skeleton className="h-6 w-48" />
-    <div className="grid gap-5 sm:grid-cols-2">{Array.from({ length: fields }, (_, i) => <div key={i} className="space-y-2"><Skeleton className="h-3 w-28" /><Skeleton className="h-11 w-full" /></div>)}</div>
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">{Array.from({ length: fields }, (_, i) => <div key={i} className="space-y-2"><Skeleton className="h-3 w-28" /><Skeleton className="h-11 w-full" /></div>)}</div>
     <div className="flex justify-end"><Skeleton className="h-11 w-36" /></div>
   </div>;
 }

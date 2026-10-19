@@ -70,7 +70,7 @@ export function AccountReferral({ accountNo }: { accountNo: string }) {
       {!summary && !error && <div className="m-5 h-28 animate-pulse rounded-lg bg-slate-100 sm:m-6" />}
 
       {summary && (
-        <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 lg:grid-cols-3">
           {/* sponsor + upline */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -159,14 +159,14 @@ export function AccountReferral({ accountNo }: { accountNo: string }) {
           {ledger && <span className="text-xs text-slate-500">{ledger.total} entries · net {money(ledger.totalAmount)}</span>}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full text-left text-sm sm:min-w-[720px]">
             <thead className="bg-slate-50 text-xs text-slate-600">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Date</th>
                 <th className="px-4 py-2.5 font-medium">{direction === "EARNED" ? "From member" : "To sponsor"}</th>
-                <th className="px-4 py-2.5 font-medium">Level</th>
-                <th className="px-4 py-2.5 font-medium">Deposit</th>
-                <th className="px-4 py-2.5 font-medium">Rule</th>
+                <th className="hidden sm:table-cell px-4 py-2.5 font-medium">Level</th>
+                <th className="hidden sm:table-cell px-4 py-2.5 font-medium">Deposit</th>
+                <th className="hidden sm:table-cell px-4 py-2.5 font-medium">Rule</th>
                 <th className="px-4 py-2.5 text-right font-medium">Commission</th>
               </tr>
             </thead>
@@ -179,13 +179,14 @@ export function AccountReferral({ accountNo }: { accountNo: string }) {
                     <td className="px-4 py-2.5">
                       <Link href={`/admin/accounts/${other.accountNo}`} className="text-navy hover:text-brand hover:underline">{other.name}</Link>
                       <span className="block font-mono text-[11px] text-slate-400">{other.accountNo}</span>
+                      <span className="block text-[11px] text-slate-500 sm:hidden">L{c.level} · {money(c.depositAmount)} deposit</span>
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-slate-700">L{c.level} · {LEVEL_LABEL[c.level]}</td>
-                    <td className="px-4 py-2.5 text-xs">
+                    <td className="hidden sm:table-cell px-4 py-2.5 text-xs text-slate-700">L{c.level} · {LEVEL_LABEL[c.level]}</td>
+                    <td className="hidden sm:table-cell px-4 py-2.5 text-xs">
                       <span className="font-mono text-slate-500">{c.receiptNo}</span>
                       <span className="block text-slate-700">{money(c.depositAmount)}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-slate-700">{rateLabel(c.commissionType, c.rate)}</td>
+                    <td className="hidden sm:table-cell px-4 py-2.5 text-xs text-slate-700">{rateLabel(c.commissionType, c.rate)}</td>
                     <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${Number(c.amount) < 0 ? "text-red-600" : "text-emerald-700"}`}>
                       {Number(c.amount) < 0 ? "−" : "+"}{money(String(Math.abs(Number(c.amount))))}
                       {c.type === "REVERSAL" && <span className="block text-[10px] font-normal text-red-500">reversal</span>}

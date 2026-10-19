@@ -92,7 +92,7 @@ export function ChangePasswordForm({ submitLabel = "Update Password", onSuccess 
           error={errors.currentPassword}
         />
       </Field>
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <Field label="New Password" required error={errors.newPassword} htmlFor="newPassword">
           <PasswordInput
             id="newPassword"

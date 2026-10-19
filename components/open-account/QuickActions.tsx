@@ -10,7 +10,7 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
         <Icon name="zap" className="size-5 text-violet-500" />
         Quick Actions
       </h2>
-      <div className="grid gap-2.5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {actions.map((a) => (
           <Link
             key={a.label}

@@ -51,7 +51,7 @@ export default function CreateAdminPage() {
         </div>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <CreateAdminForm />
         <HowItWorks steps={HOW_IT_WORKS} securityNote={SECURITY_NOTE} tagline="Secure Access. Better Control." />
       </div>

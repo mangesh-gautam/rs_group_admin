@@ -116,7 +116,7 @@ export function ReferralCommissionForm() {
 
       <form onSubmit={submit} noValidate className="space-y-5">
         {/* ---- switches ---- */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Toggle
             title="Referral commission"
             description={values.enabled ? "On — deposits pay commission to the upline." : "Off — no commission is created for any deposit."}
@@ -144,7 +144,7 @@ export function ReferralCommissionForm() {
             {values.levels.map((l) => {
               const err = errors[`level${l.level}`] || "";
               return (
-                <li key={l.level} className="grid items-center gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)_auto]">
+                <li key={l.level} className="grid grid-cols-1 items-center gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)_auto]">
                   <div>
                     <p className="font-medium text-navy">Level {l.level}</p>
                     <p className="text-xs text-slate-500">{LEVEL_LABEL[l.level]}</p>

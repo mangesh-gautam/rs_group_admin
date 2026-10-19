@@ -104,9 +104,9 @@ function ReviewKyc({ account, onDone, onUploadAgain }: { account: KycTarget; onD
     }
   };
 
-  const docs: { kind: DocumentKind; label: string; number: string | null; verified: boolean }[] = [
-    { kind: "panCard", label: "PAN", number: account.panNo, verified: account.panKyc },
-    { kind: "aadhaarCard", label: "Aadhaar", number: account.aadhaarNo ? formatAadhaar(account.aadhaarNo) : null, verified: account.aadhaarKyc },
+  const docs: { kind: DocumentKind; label: string; number: string | null; copy: boolean; verified: boolean }[] = [
+    { kind: "panCard", label: "PAN", number: account.panNo, copy: account.panCopy, verified: account.panKyc },
+    { kind: "aadhaarCard", label: "Aadhaar", number: account.aadhaarNo ? formatAadhaar(account.aadhaarNo) : null, copy: account.aadhaarCopy, verified: account.aadhaarKyc },
   ];
 
   return (
@@ -120,9 +120,9 @@ function ReviewKyc({ account, onDone, onUploadAgain }: { account: KycTarget; onD
             <div>
               <p className="text-sm font-medium text-navy">{d.label}</p>
               <p className="font-mono text-xs text-slate-600">{d.number ?? "—"}</p>
-              <KycDocState number={d.number} verified={d.verified} />
+              <KycDocState number={d.number} copy={d.copy} verified={d.verified} />
             </div>
-            {d.number && (
+            {d.copy && (
               <button type="button" onClick={() => setViewing(d.kind)} className="flex h-9 items-center gap-2 rounded-lg border border-brand/40 px-3 text-sm font-medium text-brand hover:bg-brand-soft">
                 <Icon name="eye" className="size-4" /> View copy
               </button>
@@ -266,7 +266,7 @@ function UploadKyc({ account, onDone }: { account: KycTarget; onDone: (r: Result
         </div>
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <fieldset className="space-y-3 rounded-xl border border-slate-200 p-3">
           <legend className="px-1 text-sm font-semibold text-navy">PAN</legend>
           {needPan ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import { HolderPhoto } from "@/components/accounts/HolderPhoto";
 import { DetailSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
@@ -25,6 +26,7 @@ import { CorrectionHistory } from "./TransactionCorrections";
 import { AccountReferral } from "./AccountReferral";
 import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
 import { CloseAccountDialog } from "./CloseAccountDialog";
+import { MemberLoginPanel } from "./MemberLoginPanel";
 import { DocumentViewer } from "./DocumentViewer";
 import { KycDialog } from "@/components/kyc/KycDialog";
 import { KycStatusBadge } from "@/components/kyc/KycStatusBadge";
@@ -80,19 +82,22 @@ export function AccountView({ accountNo }: { accountNo: string }) {
       {closedMessage && <Alert tone="success">{closedMessage}</Alert>}
 
       {closed && a.closure && (
-        <div className="flex items-start gap-3 rounded-2xl border border-slate-300 bg-slate-100 p-4 text-sm">
-          <Icon name="lock" className="mt-0.5 size-5 shrink-0 text-slate-600" />
-          <div>
-            <p className="font-semibold text-navy">This account is closed</p>
-            <p className="text-slate-700">
-              Closed on {formatDateTime(a.closure.closedAt)}{a.closure.closedBy ? ` by ${a.closure.closedBy}` : ""}
-              {a.closure.reason ? ` — ${a.closure.reason}` : ""}. It was settled in full. A new deposit resumes the
-              account and starts a new deposit cycle.
-            </p>
+        // phones: text first, the button underneath (side by side from sm up)
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-300 bg-slate-100 p-4 text-sm sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <Icon name="lock" className="mt-0.5 size-5 shrink-0 text-slate-600" />
+            <div className="min-w-0">
+              <p className="font-semibold text-navy">This account is closed</p>
+              <p className="text-slate-700">
+                Closed on {formatDateTime(a.closure.closedAt)}{a.closure.closedBy ? ` by ${a.closure.closedBy}` : ""}
+                {a.closure.reason ? ` — ${a.closure.reason}` : ""}. It was settled in full. A new deposit resumes the
+                account and starts a new deposit cycle.
+              </p>
+            </div>
           </div>
           <Link
             href={`/admin/deposits?accountNo=${a.accountNo}`}
-            className="ml-auto flex h-10 shrink-0 items-center gap-2 self-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
+            className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
           >
             <Icon name="download" className="size-4" /> Resume with a deposit
           </Link>
@@ -124,12 +129,7 @@ export function AccountView({ accountNo }: { accountNo: string }) {
 
       {/* ------------------------------ Header ------------------------------ */}
       <section className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:p-6">
-        {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the API */}
-        <img
-          src={a.photo}
-          alt={`Photograph of ${a.name}`}
-          className="aspect-[35/45] w-28 shrink-0 rounded-lg border border-slate-200 bg-slate-50 object-cover"
-        />
+        <HolderPhoto src={a.photo} name={a.name} className="aspect-[35/45] w-28 rounded-lg bg-slate-50" />
         <div className="min-w-0 flex-1">
           <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-bold break-words text-navy sm:text-3xl">
             {a.name} <KycStatusBadge status={a.kyc.status} className="text-xs" />
@@ -188,7 +188,7 @@ export function AccountView({ accountNo }: { accountNo: string }) {
         </div>
       </section>
 
-      <div className="grid items-start gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
         <Section icon="user" title="Personal Details">
           <Item label="Name" value={a.name} />
           <Item label="Last Name" value={a.lastName} />
@@ -283,6 +283,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
         </Section>
       </div>
 
+      <MemberLoginPanel accountNo={a.accountNo} mobileNumber={a.mobileNumber} />
+
       <AccountReferral accountNo={a.accountNo} />
 
       {/* keyed by version: reload after a KYC change or a Super Admin correction */}
@@ -306,6 +308,8 @@ export function AccountView({ accountNo }: { accountNo: string }) {
             aadhaarNo: a.aadhaarNo,
             panKyc: a.kyc.panVerified,
             aadhaarKyc: a.kyc.aadhaarVerified,
+            panCopy: !!a.documents.panCard.mime,
+            aadhaarCopy: !!a.documents.aadhaarCard.mime,
             remarks: a.kyc.remarks,
             status: a.kyc.status,
           }}
@@ -374,7 +378,7 @@ function Section({ icon, title, children }: { icon: IconName; title: string; chi
       <h2 className="mb-4 flex items-center gap-2 font-semibold text-navy">
         <Icon name={icon} className="size-5 text-brand" /> {title}
       </h2>
-      <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">{children}</dl>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">{children}</dl>
     </section>
   );
 }

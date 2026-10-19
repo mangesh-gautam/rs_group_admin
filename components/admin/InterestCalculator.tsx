@@ -81,7 +81,7 @@ export function InterestCalculator({ defaultRate = 0.75 }: { defaultRate?: numbe
         </div>
       </div>
 
-      <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="grid grid-cols-1 gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         {/* ---- inputs ---- */}
         <div className="space-y-4">
           <div>
@@ -152,13 +152,13 @@ export function InterestCalculator({ defaultRate = 0.75 }: { defaultRate?: numbe
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full min-w-[440px] text-left text-xs">
+              <table className="w-full text-left text-xs sm:min-w-[440px]">
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-3 py-2 font-medium">Month</th>
-                    <th className="px-3 py-2 text-right font-medium">Principal</th>
+                    <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Principal</th>
                     <th className="px-3 py-2 text-right font-medium">Interest (month)</th>
-                    <th className="px-3 py-2 text-right font-medium">Interest (total)</th>
+                    <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Interest (total)</th>
                     <th className="px-3 py-2 text-right font-medium">Total</th>
                   </tr>
                 </thead>
@@ -166,9 +166,9 @@ export function InterestCalculator({ defaultRate = 0.75 }: { defaultRate?: numbe
                   {tableRows.map((r) => (
                     <tr key={r.month} className={r.month === months ? "bg-brand-soft/60 font-semibold text-navy" : "text-slate-700"}>
                       <td className="px-3 py-1.5">{r.month}</td>
-                      <td className="px-3 py-1.5 text-right">{inr(r.principal)}</td>
+                      <td className="hidden px-3 py-1.5 text-right sm:table-cell">{inr(r.principal)}</td>
                       <td className="px-3 py-1.5 text-right text-emerald-700">+{inr(r.interest)}</td>
-                      <td className="px-3 py-1.5 text-right">{inr(r.totalInterest)}</td>
+                      <td className="hidden px-3 py-1.5 text-right sm:table-cell">{inr(r.totalInterest)}</td>
                       <td className="px-3 py-1.5 text-right">{inr(r.total)}</td>
                     </tr>
                   ))}

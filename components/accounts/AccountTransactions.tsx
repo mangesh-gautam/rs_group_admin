@@ -88,10 +88,12 @@ export function AccountTransactions({ accountNo, name, onChanged }: { accountNo:
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-5 sm:px-6">
-        <h2 className="mr-auto flex items-center gap-2 font-semibold text-navy">
+      {/* phones: filters side by side, tools in a 2-column grid, Deposit / Withdraw as a pair; one row from sm */}
+      <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
+        <h2 className="flex items-center gap-2 font-semibold text-navy sm:mr-auto">
           <Icon name="fileText" className="size-5 text-brand" /> Transactions
         </h2>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <select
           value={type}
           onChange={(e) => {
@@ -99,7 +101,7 @@ export function AccountTransactions({ accountNo, name, onChanged }: { accountNo:
             resetPage();
           }}
           aria-label="Filter by type"
-          className="h-9 rounded-lg border border-slate-200 px-3 text-base outline-none focus:border-brand sm:text-sm"
+          className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-base outline-none focus:border-brand sm:text-sm"
         >
           <option value="">All transactions</option>
           <option value="DEPOSIT">Deposits (credit)</option>
@@ -112,7 +114,7 @@ export function AccountTransactions({ accountNo, name, onChanged }: { accountNo:
             resetPage();
           }}
           aria-label="Filter by payment mode"
-          className="h-9 rounded-lg border border-slate-200 px-3 text-base outline-none focus:border-brand sm:text-sm"
+          className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-base outline-none focus:border-brand sm:text-sm"
         >
           <option value="">All modes</option>
           {PAYMENT_MODES.map((m) => (
@@ -124,32 +126,35 @@ export function AccountTransactions({ accountNo, name, onChanged }: { accountNo:
         <button
           type="button"
           onClick={() => setVersion((v) => v + 1)}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-navy hover:bg-slate-50"
+          className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-navy hover:bg-slate-50"
         >
           <Icon name="refresh" className="size-4" /> Refresh
         </button>
         <button type="button" onClick={completeExport} disabled={exporting}
-          className="flex min-h-9 items-center gap-1.5 rounded-lg border border-brand px-3 text-sm text-brand disabled:opacity-50">
-          <Icon name="download" className="size-4" /> {exporting ? "Exporting…" : "Export all transactions"}
+          className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-brand px-3 text-sm text-brand disabled:opacity-50">
+          <Icon name="download" className="size-4" /> {exporting ? "Exporting…" : <>Export<span className="hidden sm:inline">&nbsp;all transactions</span></>}
         </button>
         {isSuper && (
           <button type="button" onClick={() => setAddingInterest(true)}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300 px-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+            className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-emerald-300 px-3 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
             <Icon name="gift" className="size-4" /> Add interest
           </button>
         )}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
         <Link
           href={`/admin/deposits?accountNo=${accountNo}`}
-          className="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
+          className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark sm:h-9"
         >
           <Icon name="download" className="size-4" /> Deposit
         </Link>
         <Link
           href={`/admin/withdrawals?accountNo=${accountNo}`}
-          className="flex h-9 items-center gap-1.5 rounded-lg bg-amber-600 px-4 text-sm font-medium text-white hover:bg-amber-700"
+          className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-4 text-sm font-medium text-white hover:bg-amber-700 sm:h-9"
         >
           <Icon name="upload" className="size-4" /> Withdraw
         </Link>
+        </div>
       </div>
 
       {exportError && <div className="p-4"><Alert tone="error">{exportError}</Alert></div>}

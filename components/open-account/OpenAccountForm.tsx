@@ -1,5 +1,7 @@
 "use client";
 
+import { MemberCredentials, type MemberLogin } from "@/components/accounts/MemberCredentials";
+import { ModalForm } from "@/components/ui/ModalForm";
 import { SponsorPicker } from "./SponsorPicker";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -56,6 +58,8 @@ type Created = {
   formNo: string; // 000001, 000002 … (generated)
   name: string;
   createdBy: string;
+  memberLogin?: MemberLogin; // the holder's member-portal login, returned only this once
+  mobileNumber?: string;
 };
 
 const EMPTY: FormValues = {
@@ -132,7 +136,7 @@ const checkFile = (file: File, types: string[], maxMb: number) =>
       ? `File must be at most ${maxMb}MB`
       : undefined;
 
-function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
+function validate(v: FormValues): Errors {
   const e: Errors = {};
   if (!v.name.trim()) e.name = "Name is required";
   if (v.lastName.length > 80) e.lastName = "At most 80 characters";
@@ -149,13 +153,9 @@ function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
     e.alternateMobileNumber = "Must be different from Mob.";
   }
   if (!v.sex) e.sex = "Select sex";
-  // PAN / Aadhaar are optional (KYC can be completed later), each number with its copy.
+  // Photo, PAN / Aadhaar numbers and copies are all optional and independent (KYC can be completed later).
   if (v.panNo && !/^[A-Z]{5}\d{4}[A-Z]$/.test(v.panNo)) e.panNo = "Enter a valid PAN (e.g. ABCDE1234F)";
   if (v.aadhaarNo && !/^[2-9]\d{11}$/.test(v.aadhaarNo)) e.aadhaarNo = "Enter a valid 12-digit Aadhaar number";
-  if (v.panNo && !files.panCard) e.panCard = "Upload the PAN card copy";
-  if (!v.panNo && files.panCard) e.panNo = "Enter the PAN of this copy";
-  if (v.aadhaarNo && !files.aadhaarCard) e.aadhaarCard = "Upload the Aadhaar card copy";
-  if (!v.aadhaarNo && files.aadhaarCard) e.aadhaarNo = "Enter the Aadhaar number of this copy";
   if (v.bankAccountNo && !/^\d{9,18}$/.test(v.bankAccountNo)) e.bankAccountNo = "A/c No. must be 9–18 digits";
   if (v.ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.ifscCode)) e.ifscCode = "Enter a valid IFSC (e.g. SBIN0001234)";
   if (!/^\d{1,10}(\.\d{1,2})?$/.test(v.amount) || Number(v.amount) <= 0) e.amount = "Enter an amount greater than 0";
@@ -164,7 +164,6 @@ function validate(v: FormValues, files: Partial<Record<DocKey, File>>): Errors {
   if (!/^\d{1,2}$/.test(v.bufferDays) || Number(v.bufferDays) > 20) e.bufferDays = "0 to 20 days";
   if (v.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) e.email = "Enter a valid email";
   if (v.nomineeAge && !(Number(v.nomineeAge) >= 0 && Number(v.nomineeAge) <= 120)) e.nomineeAge = "0–120";
-  if (!files.photo) e.photo = "Photograph is required";
   return e;
 }
 
@@ -207,7 +206,7 @@ export function OpenAccountForm() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const found = validate(values, files);
+    const found = validate(values);
     if (isSuperAdmin && !officeId) found.officeId = "Select the office this account is opened at";
     if (sponsorInvalid) found.sponsorAccountNo = INVALID_SPONSOR;
     setErrors(found);
@@ -226,10 +225,11 @@ export function OpenAccountForm() {
         method: "POST",
         body: { ...values, ...(isSuperAdmin ? { officeId: Number(officeId) } : {}), photo, panCard, aadhaarCard },
       });
-      setCreated(result);
+      setCreated({ ...result, mobileNumber: values.mobileNumber });
       reset();
-      // Show the new account's filled Registration Form, ready to print / save as PDF.
-      router.push(`/forms/account-holder-registration/${result.accountNo}?download=1&opened=1`);
+      // Without a member login to hand over, go straight to the filled Registration Form;
+      // otherwise the login is shown first (only now) and the form follows from the dialog.
+      if (!result.memberLogin) router.push(`/forms/account-holder-registration/${result.accountNo}?download=1&opened=1`);
     } catch (err) {
       if (err instanceof ApiError && (err.code === "VALIDATION_ERROR" || err.code === "CONFLICT")) {
         setErrors(err.details as Errors);
@@ -271,6 +271,24 @@ export function OpenAccountForm() {
       noValidate
       className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-5 lg:p-6"
     >
+      {created?.memberLogin && (
+        <ModalForm
+          title="Account opened"
+          subtitle={`${created.accountNo} — ${created.name}`}
+          icon="checkCircle"
+          saving={false}
+          submitLabel="Continue to registration form"
+          onSubmit={() => router.push(`/forms/account-holder-registration/${created.accountNo}?download=1&opened=1`)}
+          onCancel={() => setCreated({ ...created, memberLogin: undefined })}
+        >
+          <p className="text-sm text-slate-700">
+            Form No. <b className="font-mono">{created.formNo}</b> · created by {created.createdBy}. Hand the member-portal
+            login below to the account holder before you continue.
+          </p>
+          <MemberCredentials login={created.memberLogin} mobileNumber={created.mobileNumber} />
+        </ModalForm>
+      )}
+
       {created && (
         <div
           role="status"
@@ -304,8 +322,8 @@ export function OpenAccountForm() {
         </span>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_150px]">
-        <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_150px]">
+        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
           {text("name", "Name", { required: true, placeholder: "First (and middle) name", autoComplete: "off" })}
           {text("lastName", "Last Name", { placeholder: "Last name", autoComplete: "off", clean: (v) => v.slice(0, 80) })}
           {text("fatherHusbandName", "Father's / Husband's Name", { placeholder: "Father's or husband's name" })}
@@ -329,10 +347,15 @@ export function OpenAccountForm() {
           {text("aadhaarNo", "Aadhaar No.", { inputMode: "numeric", placeholder: "Optional · 12-digit Aadhaar", clean: digits(12) })}
         </div>
 
-        {/* Photograph */}
-        <div>
-          <span className="mb-1.5 block text-sm font-medium text-navy">
-            Photograph<span className="text-red-500"> *</span>
+        {/* Photograph — passport-sized on phones / tablets, its own column from md */}
+        <div className="w-40 md:w-auto">
+          <span className="mb-1.5 flex items-baseline justify-between gap-2 text-sm font-medium text-navy">
+            <span>Photograph<span className="font-normal text-slate-500"> (Optional)</span></span>
+            {files.photo && (
+              <button type="button" onClick={() => pickFile("photo", undefined, PHOTO.types, PHOTO.maxMb)} className="text-xs font-normal text-red-600 hover:underline">
+                Remove
+              </button>
+            )}
           </span>
           <label
             // relative: keeps the sr-only file input inside this box — otherwise focusing it after a pick
@@ -355,7 +378,10 @@ export function OpenAccountForm() {
               type="file"
               accept=".jpg,.jpeg,.png"
               className="sr-only"
-              onChange={(e) => pickFile("photo", e.target.files?.[0], PHOTO.types, PHOTO.maxMb)}
+              onChange={(e) => {
+                pickFile("photo", e.target.files?.[0], PHOTO.types, PHOTO.maxMb);
+                e.target.value = ""; // the same file can be picked again after Remove
+              }}
             />
           </label>
           {errors.photo && <span className="mt-1 block text-xs text-red-500">{errors.photo}</span>}
@@ -368,7 +394,7 @@ export function OpenAccountForm() {
           <Icon name="house" className="mr-1.5 inline size-4 text-brand" />
           Address
         </legend>
-        <div className="grid gap-x-5 gap-y-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
           {text("houseNo", "Flat No. / Makan No.", { required: true, placeholder: "e.g. F-29, 1st Floor", clean: (v) => v.slice(0, 50) })}
           <Field label="Street / Locality / Area" required error={errors.address} className="sm:col-span-2">
             <input
@@ -399,7 +425,7 @@ export function OpenAccountForm() {
 
       {/* ---------------- Bank details ---------------- */}
       <SectionTitle icon="wallet">Bank Details</SectionTitle>
-      <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-5 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         {text("bankName", "Bank Name", { placeholder: "Bank name" })}
         {text("bankAccountNo", "A/c No.", { inputMode: "numeric", placeholder: "Account number", clean: digits(18) })}
         {text("ifscCode", "IFSC Code", { placeholder: "SBIN0001234", clean: upper(11), className: "font-mono" })}
@@ -469,7 +495,7 @@ export function OpenAccountForm() {
 
       {/* ---------------- Nominee ---------------- */}
       <SectionTitle icon="users">Nominee</SectionTitle>
-      <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.3fr)]">
+      <div className="mt-5 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.3fr)]">
         {text("nomineeName", "Nominee Name", { placeholder: "Nominee's name" })}
         {text("nomineeAge", "Age", { inputMode: "numeric", placeholder: "Age", clean: digits(3) })}
         {text("nomineeRelation", "Relation", { placeholder: "e.g. Son" })}
@@ -501,12 +527,14 @@ export function OpenAccountForm() {
           <div>
             <p className="text-sm font-semibold text-navy">Documents</p>
             <p className="text-xs text-slate-600">
-              Self-attested copies. PAN and Aadhaar are optional now — without both, KYC stays pending:
-              the account can deposit but cannot withdraw until the documents are uploaded on the KYC page.
+              Everything here is optional: the photograph, the PAN / Aadhaar numbers and their self-attested copies — give
+              whatever the member has (a number without its copy is fine, and so is a copy without its number). KYC is
+              verified only when both PAN and Aadhaar have their number <b>and</b> copy; until then it stays <b>Pending</b>
+              — the account can deposit but cannot withdraw until the rest is completed on the KYC page.
             </p>
           </div>
         </div>
-        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 min-w-0 gap-3 lg:grid-cols-2">
           {DOCUMENTS.map((doc) => {
             const file = files[doc.key];
             const err = errors[doc.key];
@@ -528,14 +556,31 @@ export function OpenAccountForm() {
                     {err ?? file?.name ?? doc.hint}
                   </span>
                 </span>
-                <span className="col-span-2 flex min-h-10 items-center justify-center rounded border border-slate-200 px-3 py-2 text-xs text-brand">
-                  {file ? "Change" : "Choose file"}
+                <span className="col-span-2 flex gap-2">
+                  <span className="flex min-h-10 flex-1 items-center justify-center rounded border border-slate-200 px-3 py-2 text-xs text-brand">
+                    {file ? "Change" : "Choose file"}
+                  </span>
+                  {file && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault(); // inside the label: don't open the file picker
+                        pickFile(doc.key, undefined, doc.types, doc.maxMb);
+                      }}
+                      className="min-h-10 rounded border border-red-200 px-3 text-xs text-red-600 hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </span>
                 <input
                   type="file"
                   accept={doc.accept}
                   className="sr-only"
-                  onChange={(e) => pickFile(doc.key, e.target.files?.[0], doc.types, doc.maxMb)}
+                  onChange={(e) => {
+                    pickFile(doc.key, e.target.files?.[0], doc.types, doc.maxMb);
+                    e.target.value = "";
+                  }}
                 />
               </label>
             );

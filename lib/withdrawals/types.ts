@@ -26,7 +26,8 @@ export type WithdrawalRules = {
   updatedBy: string | null;
 };
 
-export type DepositMonthStatus = "PAID" | "MISSED" | "PENDING";
+/** PAID · PENDING (not due) · GRACE (due, inside the buffer: no fine yet) · MISSED (due + buffer passed: fined) */
+export type DepositMonthStatus = "PAID" | "PENDING" | "GRACE" | "MISSED";
 
 /**
  * The active deposit cycle of an account. It starts with an actual deposit
@@ -52,7 +53,7 @@ export type DepositCycle = {
   penaltyMet: boolean;
   normalEligible: boolean;
   reasons: string[]; // why a normal withdrawal isn't available
-  months: { monthNo: number; month: string; status: DepositMonthStatus; depositCount: number; depositTotal: string }[];
+  months: { monthNo: number; month: string; dueOn: string; payBy: string; status: DepositMonthStatus; depositCount: number; depositTotal: string }[];
 };
 
 /** GET /api/withdrawals/accounts/:accountNo */
@@ -63,7 +64,7 @@ export type WithdrawalAccount = {
   mobileNumber: string;
   city: string;
   office: { name: string; city: string };
-  photo: string; // data URL
+  photo: string | null; // data URL; null = no photo (optional at opening)
   balance: string; // available to withdraw = principalBalance + accruedInterest
   principalBalance: string;
   accruedInterest: string; // month-end interest since the last withdrawal

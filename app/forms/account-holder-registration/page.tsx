@@ -1,3 +1,4 @@
+import { FitToWidth } from "@/components/forms/FitToWidth";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PRINT_CSS, RegistrationFormSheet } from "@/components/forms/RegistrationFormSheet";
@@ -25,9 +26,9 @@ export default function AccountHolderRegistrationFormPage() {
         <PrintButton />
       </div>
 
-      <div className="overflow-x-auto print:overflow-visible">
+      <FitToWidth width={810}>
         <RegistrationFormSheet />
-      </div>
+      </FitToWidth>
     </div>
   );
 }

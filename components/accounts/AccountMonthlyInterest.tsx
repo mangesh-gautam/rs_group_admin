@@ -54,15 +54,15 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
         <SkeletonRegion label="Loading account statement…" className="p-5 sm:p-6"><TableSkeleton rows={4} columns={5} /></SkeletonRegion>
       ) : (
         <div className="max-h-[28rem] overflow-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full text-left text-sm sm:min-w-[860px]">
             <thead className="sticky top-0 bg-slate-50 text-xs text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Month</th>
-                <th className="px-4 py-3 text-right font-medium">Deposits</th>
-                <th className="px-4 py-3 text-right font-medium">Withdrawals</th>
-                <th className="px-4 py-3 text-right font-medium">Principal</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-right font-medium">Deposits</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-right font-medium">Withdrawals</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-right font-medium">Principal</th>
                 <th className="px-4 py-3 text-right font-medium">Interest (month)</th>
-                <th className="px-4 py-3 text-right font-medium">Interest (total)</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-right font-medium">Interest (total)</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
               </tr>
             </thead>
@@ -72,15 +72,15 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
                   <p className="font-medium text-navy">{monthLabel(data.currentMonth.month)}</p>
                   <p className="text-[11px] text-amber-700">Running · credited at month end</p>
                 </td>
-                <td className="px-4 py-3 text-right text-emerald-700">+{money(data.currentMonth.deposits)}</td>
-                <td className="px-4 py-3 text-right text-red-600">
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-emerald-700">+{money(data.currentMonth.deposits)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-red-600">
                   {Number(data.currentMonth.withdrawals) > 0 ? `−${money(data.currentMonth.withdrawals)}` : "—"}
                 </td>
-                <td className="px-4 py-3 text-right text-slate-700">{money(data.currentMonth.principal)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-700">{money(data.currentMonth.principal)}</td>
                 <td className="px-4 py-3 text-right text-slate-600" title="If nothing else changes this month">
                   ≈ {money(data.currentMonth.estimatedInterest)}
                 </td>
-                <td className="px-4 py-3 text-right text-slate-700">{money(data.currentMonth.accruedInterest)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-700">{money(data.currentMonth.accruedInterest)}</td>
                 <td className="px-4 py-3 text-right font-medium text-navy">{money(data.currentMonth.balance)}</td>
               </tr>
               {data.months.map((m) => (
@@ -92,15 +92,15 @@ export function AccountMonthlyInterest({ accountNo }: { accountNo: string }) {
                       <p className="text-[11px] text-slate-400">Old rule: interest on the whole balance</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-emerald-700">+{money(m.deposits)}</td>
-                  <td className="px-4 py-3 text-right text-red-600">
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-emerald-700">+{money(m.deposits)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-red-600">
                     {Number(m.withdrawals) > 0 ? `−${money(m.withdrawals)}` : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-700">{money(m.interestBase)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-700">{money(m.interestBase)}</td>
                   <td className="px-4 py-3 text-right font-semibold text-emerald-700" title={`${m.rate}% of ${money(m.interestBase)}`}>
                     +{money(m.interest)}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-700">{m.accruedInterest ? money(m.accruedInterest) : "—"}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-700">{m.accruedInterest ? money(m.accruedInterest) : "—"}</td>
                   <td className="px-4 py-3 text-right font-semibold text-navy">{money(m.closingBalance)}</td>
                 </tr>
               ))}

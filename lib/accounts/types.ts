@@ -71,7 +71,7 @@ export type AccountDetail = Omit<AccountSummary, "office"> & {
   sponsorMobile: string | null;
   sponsorId: string | null;
   office: OfficeRef;
-  photo: string; // data URL
+  photo: string | null; // data URL; null = no photo (optional at opening)
   documents: Record<DocumentKind, { mime: string | null }>; // null mime = not uploaded
   kyc: {
     status: KycStatus;
@@ -104,6 +104,8 @@ export type KycAccount = {
   aadhaarNo: string | null;
   panKyc: boolean; // PAN verified
   aadhaarKyc: boolean; // Aadhaar verified
+  panCopy: boolean; // PAN copy on file (a number can be saved without its copy)
+  aadhaarCopy: boolean;
   status: Exclude<KycStatus, "VERIFIED">;
   submittedAt: string | null;
   submittedVia: "ADMIN" | "CUSTOMER" | null;
@@ -124,7 +126,7 @@ export type KycPage = {
 };
 
 /** What the KYC dialog needs about an account (from the account page or the KYC list). */
-export type KycTarget = Pick<KycAccount, "accountNo" | "name" | "mobileNumber" | "panNo" | "aadhaarNo" | "panKyc" | "aadhaarKyc" | "remarks"> & {
+export type KycTarget = Pick<KycAccount, "accountNo" | "name" | "mobileNumber" | "panNo" | "aadhaarNo" | "panKyc" | "aadhaarKyc" | "panCopy" | "aadhaarCopy" | "remarks"> & {
   status: KycStatus;
 };
 

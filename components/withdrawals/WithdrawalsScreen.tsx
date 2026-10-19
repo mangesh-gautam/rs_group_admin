@@ -1,5 +1,6 @@
 "use client";
 
+import { HolderPhoto } from "@/components/accounts/HolderPhoto";
 import { Skeleton, SkeletonRegion, CardsSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -41,7 +42,7 @@ export function WithdrawalsScreen({ initialAccountNo, settle = false }: { initia
   const [focusAccount, setFocusAccount] = useState<string | null>(null);
 
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       <WithdrawalDesk
         initialAccountNo={initialAccountNo}
         settle={settle}
@@ -261,12 +262,7 @@ function WithdrawalDesk({
 
       {account && (
         <div className="flex gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the API */}
-          <img
-            src={account.photo}
-            alt={`Photograph of ${account.name}`}
-            className="aspect-[35/45] w-16 shrink-0 rounded border border-slate-200 bg-white object-cover"
-          />
+          <HolderPhoto src={account.photo} name={account.name} className="aspect-[35/45] w-16 rounded bg-white" />
           <div className="min-w-0 flex-1 text-sm">
             <Link href={`/admin/accounts/${account.accountNo}`} className="font-semibold text-navy hover:underline">
               {account.name}
@@ -361,7 +357,7 @@ function WithdrawalDesk({
           <Alert tone="warning">This account has no balance to withdraw.</Alert>
         ) : !terms?.allowed ? null : (
           <form onSubmit={submit} noValidate className="space-y-4 border-t border-slate-100 pt-5">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <div className="flex items-end justify-between">
                   <Label required>Amount (₹)</Label>
@@ -607,7 +603,7 @@ function PenaltyDesk({ account, onPaid }: { account: WithdrawalAccount; onPaid: 
         Collect missed-month penalty — {cycle.missedMonths} × {money(cycle.penaltyPerMonth)} = {money(cycle.totalPenalty)}
         {Number(cycle.penaltyPaid) > 0 && ` (paid ${money(cycle.penaltyPaid)})`}
       </h3>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <Label required>Amount (₹)</Label>
           <input
@@ -747,14 +743,14 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
         </div>
       ) : (
         <div className={`overflow-x-auto ${loading && data ? "opacity-60" : ""}`}>
-          <table className="w-full min-w-[680px] text-left text-sm">
+          <table className="w-full text-left text-sm sm:min-w-[680px]">
             <thead className="bg-slate-50 text-xs text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Receipt / Date</th>
                 <th className="px-4 py-3 font-medium">Account</th>
-                <th className="px-4 py-3 font-medium">Mode</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell">Mode</th>
                 <th className="px-4 py-3 text-right font-medium">Amount / Paid</th>
-                <th className="px-4 py-3 text-right font-medium">Balance</th>
+                <th className="hidden px-4 py-3 text-right font-medium sm:table-cell">Balance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -773,6 +769,8 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                     <p className="text-xs text-slate-500">
                       {formatDateTime(w.withdrawnAt)} · {w.createdBy}
                     </p>
+                    {/* phones: Mode and Balance columns are hidden — their values go here */}
+                    <p className="text-[11px] text-slate-500 sm:hidden">{modeLabel(w.mode)} · balance after {money(w.balanceAfter)}</p>
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/admin/accounts/${w.accountNo}`} className="font-medium text-navy hover:underline">
@@ -780,7 +778,7 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                     </Link>
                     <p className="font-mono text-xs text-slate-500">{w.accountNo}</p>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-700">
+                  <td className="hidden px-4 py-3 text-xs text-slate-700 sm:table-cell">
                     {modeLabel(w.mode)}
                     {w.referenceNo && <p className="font-mono text-[11px] text-slate-500">{w.referenceNo}</p>}
                     {w.remarks && <p className="text-[11px] text-slate-500">{w.remarks}</p>}
@@ -799,7 +797,7 @@ function WithdrawalHistory({ version, accountNo }: { version: number; accountNo:
                       <p className="text-[11px] text-slate-500">paid {money(w.netAmount)}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs whitespace-nowrap text-slate-600">{money(w.balanceAfter)}</td>
+                  <td className="hidden px-4 py-3 text-right text-xs whitespace-nowrap text-slate-600 sm:table-cell">{money(w.balanceAfter)}</td>
                 </tr>
               ))}
               {data && data.items.length === 0 && (

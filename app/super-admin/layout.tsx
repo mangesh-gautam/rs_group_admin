@@ -15,6 +15,7 @@ const SUPER_ADMIN_NAV: SuperAdminNavItem[] = [
   { label: "All Accounts", href: "/super-admin/accounts", icon: "users" },
   { label: "KYC Verification", href: "/super-admin/kyc", icon: "shieldCheck" },
   { label: "Admin Management", href: "/super-admin/admin-management", icon: "users" },
+  { label: "Admin Activity", href: "/super-admin/admin-activity", icon: "barChart" },
   { label: "Active Sessions", href: "/super-admin/active-sessions", icon: "zap" },
   { label: "Offices", href: "/super-admin/offices", icon: "house" },
   { label: "Withdrawal Rules", href: "/super-admin/withdrawal-rules", icon: "calendar" },

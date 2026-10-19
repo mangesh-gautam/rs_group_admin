@@ -67,7 +67,7 @@ export function OfficeManagement() {
         </p>
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-xl border border-slate-200 bg-white">
           {error ? (
             <div className="p-4">

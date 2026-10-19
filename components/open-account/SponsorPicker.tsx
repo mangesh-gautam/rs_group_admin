@@ -84,7 +84,7 @@ export function SponsorPicker({
   const message = error ?? (invalid ? INVALID : undefined);
 
   return (
-    <div className="grid gap-x-5 gap-y-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
       <div className="relative">
         <label htmlFor={`${listId}-input`} className="mb-1.5 block text-sm font-medium text-navy">
           Sponsor ID <span className="font-normal text-slate-500">(Optional)</span>

@@ -93,7 +93,46 @@ export function KycList() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      {/* phones: one card per account */}
+      <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white md:hidden">
+        {!data && !error && Array.from({ length: 3 }, (_, i) => <li key={i} className="p-4"><Skeleton className="h-16 rounded" /></li>)}
+        {data?.items.map((a) => (
+          <li key={a.accountNo} className="space-y-3 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Link href={`/admin/accounts/${a.accountNo}`} className="font-medium text-navy hover:text-brand hover:underline">{a.name}</Link>
+                <p className="font-mono text-xs text-slate-500">{a.accountNo}</p>
+                <p className="text-xs text-slate-600">+91 {a.mobileNumber} · {formatAmount(a.balance)}</p>
+              </div>
+              <KycStatusBadge status={a.status} />
+            </div>
+            <dl className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-2.5 text-xs">
+              <div>
+                <dt className="text-slate-500">PAN</dt>
+                <dd className="font-mono text-slate-700">{a.panNo ?? "—"}</dd>
+                <dd><KycDocState number={a.panNo} copy={a.panCopy} verified={a.panKyc} /></dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Aadhaar</dt>
+                <dd className="font-mono text-slate-700">{a.aadhaarNo ? formatAadhaar(a.aadhaarNo) : "—"}</dd>
+                <dd><KycDocState number={a.aadhaarNo} copy={a.aadhaarCopy} verified={a.aadhaarKyc} /></dd>
+              </div>
+            </dl>
+            {a.status === "REJECTED" && a.remarks && <p className="text-xs text-red-600">{a.remarks}</p>}
+            {a.status === "SUBMITTED" && a.submittedAt && (
+              <p className="text-[11px] text-slate-500">{a.submittedVia === "CUSTOMER" ? "By the holder" : "At the desk"} · {formatDateTime(a.submittedAt)}</p>
+            )}
+            <KycAction account={a} onOpen={() => setOpen(a)} block />
+          </li>
+        ))}
+        {data && data.items.length === 0 && (
+          <li className="px-4 py-10 text-center text-sm text-slate-500">
+            {q ? "No account matches this search." : "No accounts here — every account in this list has completed KYC."}
+          </li>
+        )}
+      </ul>
+
+      <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
         <table className="w-full min-w-[880px] text-left text-sm">
           <thead className="bg-slate-50 text-xs text-slate-600">
             <tr>
@@ -119,11 +158,11 @@ export function KycList() {
                 <td className="px-4 py-3 text-slate-700">+91 {a.mobileNumber}</td>
                 <td className="px-4 py-3">
                   <p className="font-mono text-xs text-slate-700">{a.panNo ?? "—"}</p>
-                  <KycDocState number={a.panNo} verified={a.panKyc} />
+                  <KycDocState number={a.panNo} copy={a.panCopy} verified={a.panKyc} />
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-mono text-xs text-slate-700">{a.aadhaarNo ? formatAadhaar(a.aadhaarNo) : "—"}</p>
-                  <KycDocState number={a.aadhaarNo} verified={a.aadhaarKyc} />
+                  <KycDocState number={a.aadhaarNo} copy={a.aadhaarCopy} verified={a.aadhaarKyc} />
                 </td>
                 <td className="px-4 py-3">
                   <KycStatusBadge status={a.status} />
@@ -135,21 +174,7 @@ export function KycList() {
                   {a.status === "REJECTED" && a.remarks && <p className="mt-1 max-w-56 text-[11px] text-red-600">{a.remarks}</p>}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-navy">{formatAmount(a.balance)}</td>
-                <td className="px-4 py-3 text-right">
-                  {a.accountStatus === "CLOSED" ? (
-                    // a closed account is settled: no KYC approval — open the account instead
-                    <Link href={`/admin/accounts/${a.accountNo}`}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3.5 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-200">
-                      <Icon name="lock" className="size-3.5" /> Account closed
-                    </Link>
-                  ) : (
-                  <button type="button" onClick={() => setOpen(a)}
-                    className={`h-9 rounded-lg px-3.5 text-xs font-medium whitespace-nowrap ${
-                      a.status === "SUBMITTED" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-brand text-white hover:bg-brand-dark"}`}>
-                    {a.status === "SUBMITTED" ? "Review documents" : "Complete KYC"}
-                  </button>
-                  )}
-                </td>
+                <td className="px-4 py-3 text-right"><KycAction account={a} onOpen={() => setOpen(a)} /></td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
@@ -191,5 +216,25 @@ export function KycList() {
         />
       )}
     </div>
+  );
+}
+
+/** Review / complete KYC; a closed account is settled, so it links to the account instead. */
+function KycAction({ account: a, onOpen, block = false }: { account: KycAccount; onOpen: () => void; block?: boolean }) {
+  const size = block ? "flex w-full justify-center h-10" : "inline-flex h-9";
+  if (a.accountStatus === "CLOSED") {
+    return (
+      <Link href={`/admin/accounts/${a.accountNo}`}
+        className={`${size} items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-3.5 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-200`}>
+        <Icon name="lock" className="size-3.5" /> Account closed
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onOpen}
+      className={`${size} items-center rounded-lg px-3.5 text-xs font-medium whitespace-nowrap ${
+        a.status === "SUBMITTED" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-brand text-white hover:bg-brand-dark"}`}>
+      {a.status === "SUBMITTED" ? "Review documents" : "Complete KYC"}
+    </button>
   );
 }

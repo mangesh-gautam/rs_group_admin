@@ -120,7 +120,7 @@ export function CreateAdminForm() {
           will verify an OTP on <b>+91 {created.mobileNumber}</b> and must set a new password on
           first sign-in.
         </p>
-        <dl className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+        <dl className="mt-5 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs text-slate-500">Username</dt>
             <dd className="font-mono text-navy">{created.username}</dd>

@@ -15,11 +15,12 @@ const MONTH_STYLE: Record<DepositMonthStatus, string> = {
   PAID: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   MISSED: "bg-red-50 text-red-700 ring-red-200",
   PENDING: "bg-slate-50 text-slate-500 ring-slate-200",
+  GRACE: "bg-amber-50 text-amber-800 ring-amber-200",
 };
-const MONTH_LABEL: Record<DepositMonthStatus, string> = { PAID: "Paid", MISSED: "Missed", PENDING: "Pending" };
+const MONTH_LABEL: Record<DepositMonthStatus, string> = { PAID: "Paid", MISSED: "Missed — fine", PENDING: "Not due yet", GRACE: "In buffer" };
 
-const monthName = (iso: string) =>
-  new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+const dayMonth = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 
 /**
  * Account page → deposit cycle and withdrawal eligibility (withdrawal-service):
@@ -103,15 +104,19 @@ export function AccountWithdrawalCycle({ accountNo }: { accountNo: string }) {
           </dl>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-600">Monthly deposits in this cycle</p>
+            <p className="mb-2 text-xs font-medium text-slate-600">
+              Monthly deposits in this cycle — each month is due one month after the previous one; a fine applies only
+              after the due date and the buffer days have both passed
+            </p>
             <ul className="flex flex-wrap gap-2">
               {c.months.map((m) => (
                 <li
                   key={m.month}
                   className={`rounded-lg px-3 py-1.5 text-xs ring-1 ${MONTH_STYLE[m.status]}`}
-                  title={m.depositCount ? `${m.depositCount} deposit(s), ${money(m.depositTotal)}` : undefined}
+                  title={`Month ${m.monthNo}: due ${formatDate(m.dueOn)}${m.monthNo > 1 ? `, pay by ${formatDate(m.payBy)}` : ""}${m.depositCount ? ` · ${m.depositCount} deposit(s), ${money(m.depositTotal)}` : ""}`}
                 >
-                  <span className="font-medium">{monthName(m.month)}</span> · {MONTH_LABEL[m.status]}
+                  <span className="font-medium">{m.monthNo === 1 ? `Start ${dayMonth(m.dueOn)}` : `Due ${dayMonth(m.dueOn)}`}</span>
+                  {m.monthNo > 1 && m.status !== "PAID" && <span className="text-[11px]"> (pay by {dayMonth(m.payBy)})</span>} · {MONTH_LABEL[m.status]}
                 </li>
               ))}
             </ul>

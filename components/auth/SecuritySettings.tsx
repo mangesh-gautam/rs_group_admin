@@ -20,7 +20,7 @@ export function SecuritySettings({ breadcrumb }: { breadcrumb: string }) {
         </p>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           <ChangePasswordForm />
         </section>

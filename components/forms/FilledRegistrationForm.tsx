@@ -1,5 +1,6 @@
 "use client";
 
+import { FitToWidth } from "@/components/forms/FitToWidth";
 import { DocumentSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -129,9 +130,9 @@ export function FilledRegistrationForm({
       ) : !account ? (
         <DocumentSkeleton />
       ) : (
-        <div className="overflow-x-auto print:overflow-visible">
+        <FitToWidth width={810}>
           <RegistrationFormSheet data={toFormData(account)} />
-        </div>
+        </FitToWidth>
       )}
     </div>
   );

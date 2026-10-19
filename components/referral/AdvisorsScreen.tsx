@@ -152,7 +152,7 @@ export function AdvisorsScreen({ initial, basePath, treePath }: { initial: strin
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         {/* ---- list ---- */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           {!data && !error && <div className="m-4 h-64 animate-pulse rounded-xl bg-slate-100" />}

@@ -1,5 +1,6 @@
 "use client";
 
+import { LivePanel } from "@/components/live/LivePanel";
 import { Skeleton, SkeletonRegion, TableSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { Alert } from "@/components/auth/FormControls";
@@ -113,6 +114,8 @@ export function SuperAdminDashboard() {
           );
         })}
       </div>
+
+      <LivePanel />
 
       <DashboardOverview showCalculator />
 
