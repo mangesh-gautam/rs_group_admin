@@ -209,7 +209,7 @@ export function AccountList({ basePath = "/admin/accounts" }: { basePath?: strin
                         <p className="font-medium text-navy">{a.name}</p>
                         {a.fatherHusbandName && <p className="text-xs text-slate-500">C/o {a.fatherHusbandName}</p>}
                         {a.kycStatus && a.kycStatus !== "VERIFIED" && a.status !== "CLOSED" && <KycStatusBadge status={a.kycStatus} className="mt-1" />}
-                        {a.status === "CLOSED" && (
+                          {a.status === "CLOSED" && (
                           <span className="mt-1 inline-block rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-300">
                             Closed{a.closedAt ? ` · ${formatDateTime(a.closedAt)}` : ""}
                           </span>

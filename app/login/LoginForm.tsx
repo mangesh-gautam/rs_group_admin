@@ -33,6 +33,9 @@ function useNow(active: boolean) {
   return now;
 }
 
+const resendsText = (n: number) =>
+  n > 0 ? `${n} more resend${n === 1 ? "" : "s"} available.` : "No more resends for this sign-in.";
+
 const mmss = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -56,6 +59,8 @@ export function LoginForm() {
   const [locating, setLocating] = useState(false);
   const [resending, setResending] = useState(false);
   const [smsSent, setSmsSent] = useState(false);
+  // the last SMS request failed in the browser (Firebase): nothing reached the phone
+  const [sendFailed, setSendFailed] = useState(false);
   const phoneLogin = useRef<FirebasePhoneLogin | null>(null);
   const busyRef = useRef(false);
   useEffect(() => () => phoneLogin.current?.dispose(), []);
@@ -82,6 +87,7 @@ export function LoginForm() {
     setChallenge(null);
     setOtp("");
     setSmsSent(false);
+    setSendFailed(false);
     setFieldErrors({});
     setPassword("");
     setInfo(null);
@@ -125,13 +131,20 @@ export function LoginForm() {
           resendAt: startedAt + result.resendAvailableIn * 1000,
           location,
         });
-        const { FirebasePhoneLogin } = await import("@/lib/auth/firebasePhone");
-        phoneLogin.current?.dispose();
-        phoneLogin.current = null;
-        phoneLogin.current = new FirebasePhoneLogin();
-        await phoneLogin.current.send(result.phoneNumber, "firebase-recaptcha");
-        setSmsSent(true);
-        setInfo(`We sent a 6-digit OTP to ${result.maskedMobile}.`);
+        try {
+          const { FirebasePhoneLogin } = await import("@/lib/auth/firebasePhone");
+          phoneLogin.current?.dispose();
+          phoneLogin.current = null;
+          phoneLogin.current = new FirebasePhoneLogin();
+          await phoneLogin.current.send(result.phoneNumber, "firebase-recaptcha");
+          setSmsSent(true);
+          setSendFailed(false);
+          setInfo(`We sent a 6-digit OTP to ${result.maskedMobile}.`);
+        } catch (err) {
+          // The sign-in is still open: no SMS reached the phone, so "Send OTP again" works at once.
+          setSendFailed(true);
+          setError(`The OTP SMS could not be sent. ${errorMessage(err)}`);
+        }
       }
       // Otherwise (an Admin already verified today) the session is applied and the
       // signed-in redirect above takes over. The Super Admin always verifies.
@@ -184,31 +197,42 @@ export function LoginForm() {
       restart("Sign-in expired. Please sign in again.");
       return;
     }
-    if (Date.now() < challenge.resendAt) return;
+    if (challenge.resendsLeft <= 0) return;
+    if (!sendFailed && Date.now() < challenge.resendAt) return;
     busyRef.current=true;
     setResending(true);
     setError(null);
     setInfo(null);
     try {
       const startedAt = Date.now();
-      const result = await resendOtp(challenge.challengeId);
-      // The server consumes the resend allowance even if Firebase cannot send.
-      setChallenge({
+      const result = await resendOtp(challenge.challengeId, sendFailed);
+      // The server counts the resend before the browser sends; if this SMS fails too,
+      // the next retry is again allowed at once (sendFailed) within the remaining resends.
+      const next = {
         ...challenge,
         maskedMobile: result.maskedMobile,
         phoneNumber: result.phoneNumber,
         expiresAt: Math.min(challenge.expiresAt, startedAt + result.expiresIn * 1000),
         resendAt: startedAt + result.resendAvailableIn * 1000,
-      });
-      if (!phoneLogin.current) {
-        const { FirebasePhoneLogin } = await import("@/lib/auth/firebasePhone");
-        phoneLogin.current = new FirebasePhoneLogin();
+        resendsLeft: result.resendsLeft,
+      };
+      setChallenge(next);
+      try {
+        if (!phoneLogin.current) {
+          const { FirebasePhoneLogin } = await import("@/lib/auth/firebasePhone");
+          phoneLogin.current = new FirebasePhoneLogin();
+        }
+        await phoneLogin.current.send(result.phoneNumber, "firebase-recaptcha");
+      } catch (err) {
+        setSendFailed(true);
+        setError(`The OTP SMS could not be sent. ${errorMessage(err)}`);
+        return;
       }
-      await phoneLogin.current.send(result.phoneNumber, "firebase-recaptcha");
       setSmsSent(true);
+      setSendFailed(false);
       setOtp("");
       setFieldErrors({});
-      setInfo(`A new OTP was sent to ${result.maskedMobile}.`);
+      setInfo(`A new OTP was sent to ${result.maskedMobile}. ${resendsText(result.resendsLeft)}`);
     } catch (err) {
       if (err instanceof ApiError && RESTART_CODES.includes(err.code)) restart(err.message);
       else if (err instanceof ApiError && err.code === "OTP_RESEND_COOLDOWN") {
@@ -222,7 +246,16 @@ export function LoginForm() {
   };
 
   const expiresIn = challenge ? challenge.expiresAt - now : 0;
-  const resendIn = challenge ? challenge.resendAt - now : 0;
+  // after a failed SMS the retry is allowed at once; otherwise the server's cooldown applies
+  const resendIn = challenge && !sendFailed ? challenge.resendAt - now : 0;
+  const noResends = !!challenge && challenge.resendsLeft <= 0;
+  const resendLabel = resending
+    ? "Sending…"
+    : noResends
+      ? "No resends left"
+      : resendIn > 0
+        ? `Resend in ${mmss(resendIn)}`
+        : `${smsSent && !sendFailed ? "Resend OTP" : "Send OTP again"} (${challenge?.resendsLeft} left)`;
 
   return (
     <main className="grid min-h-screen place-items-center bg-gradient-to-br from-[#f4f7fc] to-[#e3edfb] px-3 py-6 sm:px-4 sm:py-10">
@@ -289,12 +322,27 @@ export function LoginForm() {
             </span>
             <h1 className="mt-4 text-center text-2xl font-bold text-navy">Verify it&apos;s you</h1>
             <p className="mt-1 text-center text-sm text-slate-600">
-              {smsSent ? "Enter the OTP sent to " : "Send a verification code to "}
+              {smsSent && !sendFailed ? "Enter the OTP sent to " : "Send a verification code to "}
               <b className="text-navy">{challenge.maskedMobile}</b>
             </p>
 
             <div className="mt-6 space-y-4">
               {error ? <Alert tone="error">{error}</Alert> : info && <Alert tone="info">{info}</Alert>}
+              {sendFailed && expiresIn > 0 && (
+                noResends ? (
+                  <Alert tone="error">No more OTP resends for this sign-in. Use “Use a different account” and sign in again with your password to get a new OTP.</Alert>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resending || submitting}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-brand bg-brand-soft text-sm font-semibold text-brand hover:bg-brand hover:text-white disabled:opacity-60"
+                  >
+                    {resending ? <Spinner /> : <Icon name="refresh" className="size-4" />}
+                    {resending ? "Sending…" : `Send OTP again to ${challenge.maskedMobile} (${challenge.resendsLeft} left)`}
+                  </button>
+                )
+              )}
               <Field label="One-Time Password" error={fieldErrors.otp} htmlFor="otp">
                 <input
                   id="otp"
@@ -338,10 +386,10 @@ export function LoginForm() {
               <button
                 type="button"
                 onClick={handleResend}
-                disabled={resendIn > 0 || resending || submitting || expiresIn <= 0}
+                disabled={resendIn > 0 || resending || submitting || expiresIn <= 0 || noResends}
                 className="font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
               >
-                {resending || submitting && !smsSent ? "Sending…" : resendIn > 0 ? `Retry in ${mmss(resendIn)}` : smsSent ? "Resend OTP" : "Send OTP"}
+                {resendLabel}
               </button>
             </div>
           </form>

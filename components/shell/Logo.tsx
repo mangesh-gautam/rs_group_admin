@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import logo from "@/Assets/png/Logo.png";
+import logo from "@/Assets/png/Logo-400.png"; // 400 px wide: crisp at its display size (and in print), ~1/10 of the original
 
 type LogoProps = {
   href?: string;

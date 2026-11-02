@@ -36,6 +36,8 @@ export type OtpChallenge = {
   provider: "firebase";
   expiresIn: number;
   resendAvailableIn: number;
+  /** How many more OTP SMS this sign-in may request. */
+  resendsLeft: number;
 };
 
 export type OtpResend = Omit<OtpChallenge, "requiresOtp" | "challengeId">;

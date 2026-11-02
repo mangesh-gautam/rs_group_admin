@@ -42,7 +42,8 @@ type AuthContextValue = AuthState & {
   /** A Firebase challenge — or, for an Admin already verified today, a session (applied). */
   login: (username: string, password: string, location: Coordinates) => Promise<OtpChallenge | AuthSuccess>;
   verifyOtp: (challengeId: string, firebaseIdToken: string, location: Coordinates) => Promise<AuthUser>;
-  resendOtp: (challengeId: string) => Promise<OtpResend>;
+  /** `sendFailed`: the previous SMS could not be sent, so the server skips the cooldown. */
+  resendOtp: (challengeId: string, sendFailed?: boolean) => Promise<OtpResend>;
   logout: () => Promise<void>;
   changePassword: (input: {
     currentPassword: string;
@@ -221,8 +222,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const resendOtp = useCallback(
-    (challengeId: string) =>
-      apiRequest<OtpResend>("/api/auth/resend-otp", { method: "POST", body: { challengeId } }),
+    (challengeId: string, sendFailed = false) =>
+      apiRequest<OtpResend>("/api/auth/resend-otp", { method: "POST", body: { challengeId, sendFailed } }),
     [],
   );
 

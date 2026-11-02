@@ -33,6 +33,8 @@ export type AccountSummary = {
   kycStatus: KycStatus;
   status: AccountStatus;
   closedAt: string | null;
+  /** member-app login: NONE · PENDING (first-sign-in password change not done) · ACTIVE */
+  appLogin?: "NONE" | "PENDING" | "ACTIVE";
   office: Omit<OfficeRef, "pincode">;
   createdBy: string;
   createdAt: string;

@@ -22,6 +22,7 @@ const MOCK_NAV_SECTIONS: NavSection[] = [
       { label: "KYC Verification", href: "/admin/kyc", icon: "shieldCheck" },
       { label: "Advisors", href: "/admin/advisors", icon: "handCoins" },
       { label: "Advisor Commission", href: "/admin/advisor-commission", icon: "wallet" },
+      { label: "Ranks & Rewards", href: "/admin/ranks", icon: "crown" },
       { label: "Referral Tree", href: "/admin/referral-tree", icon: "users" },
       { label: "Account Approvals", href: "/admin/approvals", icon: "checkCircle" },
     ],

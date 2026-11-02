@@ -1,10 +1,13 @@
 "use client";
 
 import { MemberCredentials, type MemberLogin } from "@/components/accounts/MemberCredentials";
+import { MemberPasswordFields } from "@/components/accounts/MemberPasswordFields";
+import { memberPasswordProblems } from "@/lib/accounts/memberPassword";
 import { ModalForm } from "@/components/ui/ModalForm";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SponsorPicker } from "./SponsorPicker";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { ApiError, errorMessage } from "@/lib/auth/api";
 import { useOffices } from "@/lib/offices/useOffices";
@@ -12,6 +15,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { officeLabel } from "@/lib/auth/types";
 import { INDIAN_STATES } from "@/lib/indianStates";
 import { ACCOUNT_TYPES } from "@/lib/deposits/types";
+import { HOLDER_FIELDS, SEXES, displayHolderValue, validateHolderDetails } from "@/lib/accounts/holderDetails";
 
 /**
  * Open New Account — the "Account Holder Registration Form" in digital form.
@@ -58,7 +62,7 @@ type Created = {
   formNo: string; // 000001, 000002 … (generated)
   name: string;
   createdBy: string;
-  memberLogin?: MemberLogin; // the holder's member-portal login, returned only this once
+  memberLogin?: MemberLogin; // username from the API + the password the Admin typed here (never returned by the API)
   mobileNumber?: string;
 };
 
@@ -91,12 +95,6 @@ const EMPTY: FormValues = {
   nomineeRelation: "",
   sponsorAccountNo: "",
 };
-
-const SEXES = [
-  { value: "MALE", label: "Male" },
-  { value: "FEMALE", label: "Female" },
-  { value: "OTHER", label: "Other" },
-];
 
 // Mirrors customer-service src/lib/documents.ts (the backend is authoritative).
 const DOCUMENTS: { key: DocKey; label: string; icon: IconName; accept: string; types: string[]; maxMb: number; hint: string }[] = [
@@ -137,33 +135,15 @@ const checkFile = (file: File, types: string[], maxMb: number) =>
       : undefined;
 
 function validate(v: FormValues): Errors {
-  const e: Errors = {};
-  if (!v.name.trim()) e.name = "Name is required";
-  if (v.lastName.length > 80) e.lastName = "At most 80 characters";
-  if (!v.houseNo.trim()) e.houseNo = "Flat No. / Makan No. is required";
-  if (!v.address.trim()) e.address = "Address is required";
-  if (!v.city.trim()) e.city = "City is required";
-  if (!v.state) e.state = "Select a state";
-  if (!/^[1-9]\d{5}$/.test(v.pincode)) e.pincode = "Enter a valid 6-digit PIN code";
-  if (!v.dob) e.dob = "Date of birth is required";
-  if (!/^[6-9]\d{9}$/.test(v.mobileNumber)) e.mobileNumber = "Enter a valid 10-digit mobile number";
-  if (v.alternateMobileNumber && !/^[6-9]\d{9}$/.test(v.alternateMobileNumber)) {
-    e.alternateMobileNumber = "Enter a valid 10-digit mobile number";
-  } else if (v.alternateMobileNumber && v.alternateMobileNumber === v.mobileNumber) {
-    e.alternateMobileNumber = "Must be different from Mob.";
-  }
-  if (!v.sex) e.sex = "Select sex";
+  // personal, contact, address, bank and nominee rules are shared with the "Edit details" form
+  const e: Errors = { ...validateHolderDetails(v) };
   // Photo, PAN / Aadhaar numbers and copies are all optional and independent (KYC can be completed later).
   if (v.panNo && !/^[A-Z]{5}\d{4}[A-Z]$/.test(v.panNo)) e.panNo = "Enter a valid PAN (e.g. ABCDE1234F)";
   if (v.aadhaarNo && !/^[2-9]\d{11}$/.test(v.aadhaarNo)) e.aadhaarNo = "Enter a valid 12-digit Aadhaar number";
-  if (v.bankAccountNo && !/^\d{9,18}$/.test(v.bankAccountNo)) e.bankAccountNo = "A/c No. must be 9–18 digits";
-  if (v.ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.ifscCode)) e.ifscCode = "Enter a valid IFSC (e.g. SBIN0001234)";
   if (!/^\d{1,10}(\.\d{1,2})?$/.test(v.amount) || Number(v.amount) <= 0) e.amount = "Enter an amount greater than 0";
   if (!v.accountType) e.accountType = "Select the account type";
   if (!/^\d{1,2}(\.\d{1,2})?$/.test(v.interestRate) || Number(v.interestRate) > 10) e.interestRate = "0 to 10 % per month";
   if (!/^\d{1,2}$/.test(v.bufferDays) || Number(v.bufferDays) > 20) e.bufferDays = "0 to 20 days";
-  if (v.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) e.email = "Enter a valid email";
-  if (v.nomineeAge && !(Number(v.nomineeAge) >= 0 && Number(v.nomineeAge) <= 120)) e.nomineeAge = "0–120";
   return e;
 }
 
@@ -184,6 +164,16 @@ export function OpenAccountForm() {
   const [sponsorInvalid, setSponsorInvalid] = useState(false);
   // Bumped on reset so file inputs (uncontrolled) are remounted empty.
   const [formKey, setFormKey] = useState(0);
+  // Member-portal login: username = the account number; the Admin sets the initial password
+  const [memberPw, setMemberPw] = useState({ password: "", confirm: "" });
+  const [memberPwErrors, setMemberPwErrors] = useState<{ password?: string; confirm?: string }>({});
+  // The review popup is open: nothing is saved until the admin confirms it.
+  const [reviewing, setReviewing] = useState(false);
+  // One id per filled-in form: sending the same submission again can't open a second account.
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  // set synchronously: a fast double click can't send the form twice before `submitting` re-renders
+  const savingRef = useRef(false);
+  const { offices } = useOffices();
 
   const set = (field: keyof FormValues, clean?: (v: string) => string) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -209,45 +199,69 @@ export function OpenAccountForm() {
     const found = validate(values);
     if (isSuperAdmin && !officeId) found.officeId = "Select the office this account is opened at";
     if (sponsorInvalid) found.sponsorAccountNo = INVALID_SPONSOR;
+    const pwProblems = memberPasswordProblems(memberPw.password);
+    const pwErrors = {
+      password: !memberPw.password ? "Set the member's initial password" : pwProblems.length ? pwProblems.join(" · ") : undefined,
+      confirm: memberPw.password && memberPw.confirm !== memberPw.password ? "The two passwords don't match" : undefined,
+    };
+    setMemberPwErrors(pwErrors);
     setErrors(found);
     setFormError(null);
-    if (Object.keys(found).length) {
+    if (Object.keys(found).length || pwErrors.password || pwErrors.confirm) {
       setFormError("Please correct the highlighted fields.");
       return;
     }
+    // every field is valid: show everything entered for a last check before saving
+    setReviewing(true);
+  };
 
+  /** "Confirm and Create Account" in the review popup — the only place the account is saved. */
+  const createAccount = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSubmitting(true);
     try {
       const [photo, panCard, aadhaarCard] = await Promise.all(
         (["photo", "panCard", "aadhaarCard"] as const).map((k) => (files[k] ? readAsDataUrl(files[k]) : undefined)),
       );
-      const result = await authFetch<Created>("/api/customers/account-holders", {
+      const result = await authFetch<Omit<Created, "memberLogin"> & { memberLogin?: { username: string } }>("/api/customers/account-holders", {
         method: "POST",
-        body: { ...values, ...(isSuperAdmin ? { officeId: Number(officeId) } : {}), photo, panCard, aadhaarCard },
+        body: { ...values, ...(isSuperAdmin ? { officeId: Number(officeId) } : {}), photo, panCard, aadhaarCard, requestId,
+          memberPassword: memberPw.password },
       });
-      setCreated({ ...result, mobileNumber: values.mobileNumber });
+      setReviewing(false);
+      // the API never returns the password: show the one typed here, to hand over now
+      setCreated({ ...result, mobileNumber: values.mobileNumber,
+        memberLogin: result.memberLogin ? { username: result.memberLogin.username, password: memberPw.password } : undefined });
       reset();
       // Without a member login to hand over, go straight to the filled Registration Form;
       // otherwise the login is shown first (only now) and the form follows from the dialog.
       if (!result.memberLogin) router.push(`/forms/account-holder-registration/${result.accountNo}?download=1&opened=1`);
     } catch (err) {
+      // back to the form, with the server's field messages next to the fields
+      setReviewing(false);
       if (err instanceof ApiError && (err.code === "VALIDATION_ERROR" || err.code === "CONFLICT")) {
         setErrors(err.details as Errors);
+        if (err.details.memberPassword) setMemberPwErrors({ password: err.details.memberPassword });
       }
       setFormError(errorMessage(err));
     } finally {
+      savingRef.current = false;
       setSubmitting(false);
     }
   };
 
   const reset = () => {
     setValues(EMPTY);
+    setMemberPw({ password: "", confirm: "" });
+    setMemberPwErrors({});
     setFiles({});
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     setPhotoUrl(null);
     setErrors({});
     setFormError(null);
     setFormKey((k) => k + 1);
+    setRequestId(crypto.randomUUID()); // a new form → a new submission
   };
 
   const text = (field: keyof FormValues, label: string, props: Partial<FieldProps> & React.InputHTMLAttributes<HTMLInputElement> = {}) => {
@@ -264,7 +278,35 @@ export function OpenAccountForm() {
     );
   };
 
+  const officeText = isSuperAdmin
+    ? (() => { const o = offices?.find((x) => String(x.id) === officeId); return o ? `${officeLabel(o)} (${o.pincode})` : "—"; })()
+    : user?.office ? `${officeLabel(user.office)} (${user.office.pincode})` : "—";
+
   return (
+    <>
+    {reviewing && (
+      <ConfirmDialog
+        title="Check the account details"
+        subtitle="Nothing is saved yet. Confirm only if every detail below is correct."
+        icon="clipboard"
+        wide
+        busy={submitting}
+        confirmLabel="Confirm and Create Account"
+        busyLabel="Creating account…"
+        backLabel="Go Back and Edit"
+        onConfirm={createAccount}
+        onBack={() => setReviewing(false)}
+      >
+        <OpenAccountReview values={values} files={files} photoUrl={photoUrl} officeText={officeText} />
+        <p className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <Icon name="lock" className="mt-0.5 size-4 shrink-0 text-brand" />
+          <span>
+            <b>Member portal login:</b> username = the account number (given on saving) · initial password set
+            ({"•".repeat(Math.min(memberPw.password.length, 12))}). Sign-in also needs an OTP to the registered mobile.
+          </span>
+        </p>
+      </ConfirmDialog>
+    )}
     <form
       key={formKey}
       onSubmit={handleSubmit}
@@ -520,6 +562,20 @@ export function OpenAccountForm() {
         />
       </div>
 
+      <hr className="my-6 border-slate-100" />
+
+      {/* ---------------- Member portal login ---------------- */}
+      <SectionTitle icon="lock">Member Portal Login</SectionTitle>
+      <p className="mt-1 text-xs text-slate-500">
+        The holder signs in to the RS Group app with <b>username = the account number</b> (given when you save) and the
+        password you set here, plus an OTP to the registered mobile. Only a secure hash is stored — the password is shown to
+        you once after saving, to hand over. A forgotten password is reset in the app with an OTP, or here at the office.
+      </p>
+      <div className="mt-4">
+        <MemberPasswordFields idPrefix="open" password={memberPw.password} confirm={memberPw.confirm} errors={memberPwErrors}
+          onChange={(next) => { setMemberPw(next); setMemberPwErrors({}); }} />
+      </div>
+
       {/* ---------------- Documents ---------------- */}
       <div className="mt-6 rounded-xl border border-blue-100 bg-slate-50/70 p-4">
         <div className="mb-3 flex items-start gap-3">
@@ -616,6 +672,65 @@ export function OpenAccountForm() {
         </button>
       </div>
     </form>
+    </>
+  );
+}
+
+/** Everything entered in the form, by section, for the confirmation popup. */
+function OpenAccountReview({ values, files, photoUrl, officeText }: {
+  values: FormValues; files: Partial<Record<DocKey, File>>; photoUrl: string | null; officeText: string;
+}) {
+  const sections: { title: string; rows: [string, string, boolean?][] }[] = [
+    { title: "Office", rows: [["Office", officeText]] },
+    ...(["Account Holder", "Address", "Bank Details"] as const).map((section) => ({
+      title: section,
+      rows: [
+        ...HOLDER_FIELDS.filter((f) => f.section === section).map((f) => [f.label, displayHolderValue(f.key, values[f.key]), f.mono] as [string, string, boolean?]),
+        ...(section === "Account Holder"
+          ? [["PAN No.", values.panNo || "—", true], ["Aadhaar No.", values.aadhaarNo || "—", true]] as [string, string, boolean?][]
+          : []),
+      ],
+    })),
+    {
+      title: "Amount, Account Type & Interest",
+      rows: [
+        ["Amount (₹)", values.amount ? `₹${Number(values.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"],
+        ["Account Type", ACCOUNT_TYPES.find((t) => t.value === values.accountType)?.label ?? "—"],
+        ["Interest Rate", `${values.interestRate}% per month`],
+        ["Buffer Days", `${values.bufferDays} days`],
+      ],
+    },
+    { title: "Nominee", rows: HOLDER_FIELDS.filter((f) => f.section === "Nominee").map((f) => [f.label, displayHolderValue(f.key, values[f.key])]) },
+    { title: "Sponsor", rows: [["Sponsor ID", values.sponsorAccountNo || "—", true]] },
+    {
+      title: "Documents",
+      rows: [
+        ["Photograph", files.photo?.name ?? "Not provided"],
+        ["PAN Card copy", files.panCard?.name ?? "Not provided"],
+        ["Aadhaar Card copy", files.aadhaarCard?.name ?? "Not provided"],
+      ],
+    },
+  ];
+  return (
+    <div className="space-y-4">
+      {photoUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+        <img src={photoUrl} alt="Account holder photograph" className="h-28 w-[88px] rounded-lg border border-slate-200 object-cover" />
+      )}
+      {sections.map((s) => (
+        <section key={s.title}>
+          <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">{s.title}</h3>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-slate-200 p-3 text-sm sm:grid-cols-2">
+            {s.rows.map(([label, value, mono]) => (
+              <div key={label} className="flex min-w-0 justify-between gap-3 sm:block">
+                <dt className="text-slate-500">{label}</dt>
+                <dd className={`min-w-0 text-right font-medium break-words text-navy sm:text-left ${mono ? "font-mono" : ""}`}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -709,7 +824,7 @@ function AccountNoPreview({ pincode }: { pincode: string }) {
   );
 }
 
-const inputCls = (error?: string) =>
+export const inputCls = (error?: string) =>
   `h-10 w-full rounded-lg border bg-white px-3 text-base text-slate-800 sm:text-sm outline-none placeholder:text-slate-400 focus:ring-2 ${
     error
       ? "border-red-300 focus:border-red-400 focus:ring-red-100"
@@ -730,7 +845,7 @@ type FieldProps = {
   clean?: (v: string) => string;
 };
 
-function Field({
+export function Field({
   label,
   required,
   error,

@@ -7,7 +7,10 @@ import { Icon } from "@/components/icons";
 import { errorMessage } from "@/lib/auth/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { formatDateTime } from "@/lib/auth/types";
+import { ApiError } from "@/lib/auth/api";
+import { memberPasswordProblems } from "@/lib/accounts/memberPassword";
 import { MemberCredentials, type MemberLogin } from "./MemberCredentials";
+import { MemberPasswordFields } from "./MemberPasswordFields";
 
 type MemberSession = {
   id: string;
@@ -26,6 +29,7 @@ const ENDED: Record<string, string> = {
   LOGOUT: "signed out",
   ADMIN_SIGNED_OUT: "signed out by an admin",
   PASSWORD_RESET: "ended by a password reset",
+  PASSWORD_CHANGED: "ended when the member changed the password",
   REUSE_DETECTED: "ended (token replay detected)",
 };
 
@@ -34,15 +38,35 @@ type LoginStatus = {
   hasLogin: boolean;
   username: string | null;
   passwordSetAt: string | null;
+  passwordSetBy: "ADMIN" | "MEMBER" | null;
+  mustChangePassword: boolean; // the holder must choose their own password first (never set by the office)
+  mobileNumber: string; // sign-in and forgot-password OTPs go here
   lastLoginAt: string | null;
   lockedUntil: string | null;
   activeSessions: number;
 };
 
+type LoginEvent = { event: string; at: string; ipAddress: string | null; by: string | null; firstLogin: boolean; via: string | null; locked: boolean };
+
+const EVENT_LABEL: Record<string, (e: LoginEvent) => string> = {
+  ACCOUNT_OPENED: (e) => `Account opened and password set${e.by ? ` by ${e.by}` : ""}`,
+  MEMBER_LOGIN_SET: (e) => `New password set at the office${e.by ? ` by ${e.by}` : ""}`,
+  MEMBER_PASSWORD_CHANGED: () => "Member changed their password",
+  MEMBER_PASSWORD_RESET_REQUESTED: () => "Forgot password (app): OTP requested",
+  MEMBER_PASSWORD_RESET_VERIFIED: () => "Forgot password (app): OTP verified",
+  MEMBER_PASSWORD_RESET: () => "Forgot password (app): new password set by the member",
+  MEMBER_LOGIN: () => "Signed in",
+  MEMBER_LOGIN_FAILED: (e) => (e.locked ? "Wrong password — login locked" : "Wrong password"),
+};
+
 /**
- * Account page → the holder's member-portal login (rs_group_Users): whether it exists,
- * last sign-in, and "Generate new password" — which also creates the login of an
- * account opened before the portal existed, and signs the holder out everywhere.
+ * Account page → the holder's member-portal login (rs_group_Users): username (= account
+ * number, always shown), the registered mobile (sign-in and forgot-password OTPs), "Set new
+ * password" — for a member who forgot theirs and came to the office: the Admin types it (no OTP)
+ * and gives it to the holder (it also creates the login of an account opened before the portal
+ * existed and signs the holder out everywhere) — and the credential history. Members can also
+ * reset it themselves in the app with an OTP. The stored password is a one-way hash: nobody can
+ * read it back, so a new one is set instead.
  */
 export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: string; mobileNumber: string }) {
   const { authFetch } = useAuth();
@@ -55,6 +79,9 @@ export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: strin
   const [sessions, setSessions] = useState<MemberSession[] | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [signingOut, setSigningOut] = useState<string | null>(null);
+  const [newPw, setNewPw] = useState({ password: "", confirm: "" });
+  const [newPwErrors, setNewPwErrors] = useState<{ password?: string; confirm?: string }>({});
+  const [history, setHistory] = useState<LoginEvent[] | null>(null);
 
   // where the member is signed in — refreshed every 10 s while the page is open
   const loadSessions = useCallback(async (signal: AbortSignal) => {
@@ -87,18 +114,34 @@ export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: strin
       .then(setStatus, (err) => {
         if ((err as Error).name !== "AbortError") setError(errorMessage(err));
       });
+    authFetch<{ items: LoginEvent[] }>(`/api/customers/account-holders/${encodeURIComponent(accountNo)}/member-login/history`, { signal: controller.signal })
+      .then((r) => setHistory(r.items), () => setHistory([]));
     return () => controller.abort();
   }, [authFetch, accountNo, version]);
 
-  const generate = async () => {
+  /** The Admin's new initial password; the API never sends a password back. */
+  const setPassword = async () => {
+    const problems = memberPasswordProblems(newPw.password);
+    const found = {
+      password: !newPw.password ? "Set a password" : problems.length ? problems.join(" · ")
+        : newPw.password.toUpperCase().includes(accountNo) ? "Don't use the account number in the password" : undefined,
+      confirm: newPw.password && newPw.confirm !== newPw.password ? "The two passwords don't match" : undefined,
+    };
+    setNewPwErrors(found);
+    if (found.password || found.confirm) return;
     setBusy(true);
     setError(null);
     try {
-      setIssued(await authFetch<MemberLogin>(`/api/customers/account-holders/${encodeURIComponent(accountNo)}/member-login`, { method: "POST" }));
+      const r = await authFetch<{ username: string }>(`/api/customers/account-holders/${encodeURIComponent(accountNo)}/member-login`, {
+        method: "POST", body: { password: newPw.password },
+      });
+      setIssued({ username: r.username, password: newPw.password });
+      setNewPw({ password: "", confirm: "" });
       setConfirming(false);
       setVersion((v) => v + 1);
     } catch (err) {
-      setError(errorMessage(err));
+      if (err instanceof ApiError && err.details.password) setNewPwErrors({ password: err.details.password });
+      else setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -113,7 +156,7 @@ export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: strin
         {status && !confirming && (
           <button type="button" onClick={() => { setConfirming(true); setIssued(null); }}
             className="flex h-9 items-center gap-2 rounded-lg border border-brand/40 px-3 text-sm font-medium text-brand hover:bg-brand-soft">
-            <Icon name="refresh" className="size-4" /> {status.hasLogin ? "Generate new password" : "Create login"}
+            <Icon name="refresh" className="size-4" /> {status.hasLogin ? "Set new password (forgotten)" : "Create login"}
           </button>
         )}
       </div>
@@ -121,8 +164,10 @@ export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: strin
       {error && <div className="mb-3"><Alert tone="error">{error}</Alert></div>}
 
       {status && (
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
           <Item label="Username" value={status.username ?? "No login yet"} mono={!!status.username} />
+          <Item label="Password" value={!status.hasLogin ? "—" : status.passwordSetBy === "MEMBER" ? "Changed by the member" : "Set by the office"} />
+          <Item label="Registered mobile (OTP)" value={`+91 ${status.mobileNumber}`} mono />
           <Item label="Password set" value={status.passwordSetAt ? formatDateTime(status.passwordSetAt) : "—"} />
           <Item label="Last sign-in" value={status.lastLoginAt ? formatDateTime(status.lastLoginAt) : "Never"} />
           <Item label="Signed in now" value={status.lockedUntil ? `Locked until ${formatDateTime(status.lockedUntil)}` : `${status.activeSessions} session${status.activeSessions === 1 ? "" : "s"}`} />
@@ -130,20 +175,22 @@ export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: strin
       )}
 
       {confirming && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-          <span className="text-slate-700">
+        <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+          <p className="text-slate-700">
             {status?.hasLogin
-              ? "A new password replaces the current one and signs the holder out of the portal everywhere."
-              : "Creates the holder's portal login (username = account number) with a generated password."}
-          </span>
-          <span className="flex gap-2">
-            <button type="button" onClick={() => setConfirming(false)} disabled={busy}
+              ? "For a member who forgot the password (no OTP needed here — the member can also reset it in the app with an OTP): the new password replaces the current one at once, unlocks the login and signs the holder out of the app everywhere. Give it to the holder in person — it is shown once, after saving."
+              : "Creates the holder's app login (username = account number) with the password you set. Give it to the holder in person — it is shown once, after saving."}
+          </p>
+          <MemberPasswordFields idPrefix="reset" password={newPw.password} confirm={newPw.confirm} errors={newPwErrors} disabled={busy}
+            onChange={(next) => { setNewPw(next); setNewPwErrors({}); }} />
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => { setConfirming(false); setNewPw({ password: "", confirm: "" }); setNewPwErrors({}); }} disabled={busy}
               className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
-            <button type="button" onClick={generate} disabled={busy}
+            <button type="button" onClick={setPassword} disabled={busy}
               className="h-9 rounded-lg bg-brand px-3 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60">
-              {busy ? "Generating…" : "Generate"}
+              {busy ? "Saving…" : status?.hasLogin ? "Set new password" : "Create login"}
             </button>
-          </span>
+          </div>
         </div>
       )}
 
@@ -208,6 +255,19 @@ export function MemberLoginPanel({ accountNo, mobileNumber }: { accountNo: strin
             </table>
           </div>
         </div>
+      )}
+      {history && history.length > 0 && (
+        <details className="mt-5 rounded-lg border border-slate-200">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-navy">Login &amp; password history ({history.length})</summary>
+          <ol className="divide-y divide-slate-100 border-t border-slate-100 text-sm">
+            {history.map((e, i) => (
+              <li key={`${e.event}-${e.at}-${i}`} className="flex flex-wrap items-baseline justify-between gap-x-3 px-3 py-2">
+                <span className="text-navy">{(EVENT_LABEL[e.event] ?? (() => e.event))(e)}</span>
+                <span className="text-xs text-slate-500">{formatDateTime(e.at)}{e.ipAddress ? ` · IP ${e.ipAddress}` : ""}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
       )}
     </section>
   );

@@ -38,6 +38,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The only optimized image is the logo (a fingerprinted static import): resize it once and
+  // keep the result for a year instead of re-encoding it when the default 4-hour cache expires.
+  images: { minimumCacheTTL: 31_536_000 },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

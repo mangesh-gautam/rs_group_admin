@@ -20,6 +20,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Run on the server (pm2)
+
+```bash
+npm ci && npm run build
+pm2 delete rs-group-admin; pm2 start ecosystem.config.cjs; pm2 save
+```
+
+`ecosystem.config.cjs` runs Next.js directly (no extra `npm` process in front of it), caps the
+heap and restarts the app if it ever passes 512 MB. Later deploys: `npm ci && npm run build && pm2 reload rs-group-admin`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

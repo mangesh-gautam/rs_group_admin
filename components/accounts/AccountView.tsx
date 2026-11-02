@@ -27,6 +27,7 @@ import { AccountReferral } from "./AccountReferral";
 import { AccountWithdrawalCycle } from "./AccountWithdrawalCycle";
 import { CloseAccountDialog } from "./CloseAccountDialog";
 import { MemberLoginPanel } from "./MemberLoginPanel";
+import { HolderDetailsEditPanel } from "./HolderDetailsEditPanel";
 import { DocumentViewer } from "./DocumentViewer";
 import { KycDialog } from "@/components/kyc/KycDialog";
 import { KycStatusBadge } from "@/components/kyc/KycStatusBadge";
@@ -282,6 +283,9 @@ export function AccountView({ accountNo }: { accountNo: string }) {
           <Item label="Office" value={`${officeLabel(a.office)} (${a.office.pincode})`} wide />
         </Section>
       </div>
+
+      {/* 237: at most 3 confirmed edits of the holder's details; reloads the page data after a save */}
+      <HolderDetailsEditPanel accountNo={a.accountNo} onSaved={() => setVersion((v) => v + 1)} />
 
       <MemberLoginPanel accountNo={a.accountNo} mobileNumber={a.mobileNumber} />
 

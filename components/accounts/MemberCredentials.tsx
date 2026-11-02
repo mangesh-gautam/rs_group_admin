@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { Icon } from "@/components/icons";
 
-/** A member-portal login, as returned once when it is generated (account opened / password reset). */
+/** A member-portal login to hand over: username from the API, the initial password the Admin just set. */
 export type MemberLogin = { username: string; password: string };
 
 /**
- * The generated member-portal login, to hand to the account holder. The password is
- * shown only this once (only its hash is stored); a lost password is replaced with
- * "Generate new password" on the account page.
+ * The member-portal login to hand to the account holder, right after the Admin set the
+ * password (account opened / new password). The API never returns passwords — this is the one
+ * typed in this browser, shown only now. It stays valid; a member who forgets it resets it in the
+ * app (OTP to the registered mobile) or gets a new one at the office.
  */
 export function MemberCredentials({ login, mobileNumber }: { login: MemberLogin; mobileNumber?: string }) {
   return (
@@ -22,8 +23,9 @@ export function MemberCredentials({ login, mobileNumber }: { login: MemberLogin;
         <Credential label="Password" value={login.password} />
       </dl>
       <p className="mt-3 text-xs text-amber-900">
-        The password is shown only now. At sign-in the holder also receives an OTP on the registered mobile number
-        {mobileNumber ? ` (+91 ${mobileNumber})` : ""}. The portal only shows the account — it can&apos;t deposit or withdraw.
+        Shown only now — give it to the holder in person. Every sign-in also needs an OTP sent to the registered mobile
+        number{mobileNumber ? ` (+91 ${mobileNumber})` : ""}. A forgotten password can be reset in the app (&quot;Forgot password?&quot;,
+        OTP to the same mobile) or here at the office. The portal only shows the account — it can&apos;t deposit or withdraw.
       </p>
     </div>
   );
